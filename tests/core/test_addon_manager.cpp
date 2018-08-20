@@ -25,13 +25,15 @@ namespace
 #define DYNAMIC_ADDON_PATH "./libtest_dynamic_addon.so"
 #endif
 
-const char* modulePath = DYNAMIC_ADDON_PATH;
+const char * modulePath = DYNAMIC_ADDON_PATH;
 
 }
 
 TEST(AddonManager, DISABLED_CanCreateDynamicAddons)
 {
-  AddonsManager::UniquePtr addonsManager = CreateAddonsManager();
+  auto logger = spdlog::stderr_color_mt("test");
+  logger->set_level(spdlog::level::info);
+  AddonsManager::UniquePtr addonsManager = CreateAddonsManager(logger);
   AddonInformation config;
   config.Id = OpcCoreTests::TestDynamicAddonId;
   config.Factory = Common::CreateDynamicAddonFactory(modulePath);

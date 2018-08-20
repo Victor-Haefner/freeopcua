@@ -19,42 +19,99 @@
 
 #pragma once
 
-#include <algorithm>
-#include <iostream>
+#include <iomanip>
+#include <sstream>
 #include <vector>
-#include <algorithm>
 
 namespace OpcUa
 {
 
-  inline void PrintBlob(const std::vector<char>& buf, std::size_t size)
-  {
-    size = std::min(size, buf.size());
-    unsigned pos = 0;
-    std::cout << "Data size: " << size << std::endl;
-    while (pos < size)
+inline std::string ToHexDump(const char * buf, std::size_t size)
+{
+  std::stringstream result;
+  std::stringstream lineEnd;
+  unsigned pos = 0;
+  result << "size: " << size << "(0x" << std::hex << size << ")";
+
+  while (pos < size)
     {
-      if (pos)
-        printf((pos % 16 == 0) ? "\n" : " ");
+      if ((pos % 16) == 0)
+        {
+          result << std::endl << std::setfill('0') << std::setw(4) << (pos & 0xFFFF);
+          lineEnd.str(std::string());
+        }
+      if ((pos % 8) == 0)
+        {
+          result << " ";
+          lineEnd << " ";
+        }
 
-      const char letter = buf[pos];
-      printf("%02x", (unsigned)letter & 0x000000FF);
+      const char c = buf[pos];
+      result << " " << std::setw(2) << (c & 0xFF);
+      lineEnd << ((c > ' ' && c < 0x7f) ? c : '.');
 
-      if (letter > ' ')
-        std::cout << "(" << letter << ")";
-      else
-        std::cout << "   ";
-
+      if ((pos % 16) == 15)
+        {
+          result << " " << lineEnd.str();
+        }
       ++pos;
     }
 
-    std::cout << std::endl << std::flush;
-  }
+  result << std::endl << std::flush;
+  return result.str();
+}
 
-  inline void PrintBlob(const std::vector<char>& buf)
-  {
-    PrintBlob(buf, buf.size());
-  }
+template <typename T> inline std::ostream & ToHexDump(std::ostream & os, const std::vector<T> & buf, std::size_t size)
+{
+  std::stringstream lineEnd;
+  size = std::min(size, buf.size());
+  unsigned pos = 0;
+  os << "size: " << size << "(0x" << std::hex << size << ")";
+
+  while (pos < size)
+    {
+      if ((pos % 16) == 0)
+        {
+          os << std::endl << std::setfill('0') << std::setw(4) << (pos & 0xFFFF);
+          lineEnd.str(std::string());
+        }
+      if ((pos % 8) == 0)
+        {
+          os << " ";
+          lineEnd << " ";
+        }
+
+      const char c = buf[pos];
+      os << " " << std::setw(2) << (c & 0xFF);
+      lineEnd << ((c > ' ' && c < 0x7f) ? c : '.');
+
+      if ((pos % 16) == 15)
+        {
+          os << " " << lineEnd.str();
+        }
+      ++pos;
+    }
+
+  os << std::endl;
+  return os;
+}
+
+template <typename T> inline std::ostream & ToHexDump(std::ostream & os, const std::vector<T> & buf)
+{
+    return ToHexDump(os, buf, buf.size());
+}
+
+inline std::string ToHexDump(const std::vector<char> & buf, std::size_t size)
+{
+  std::stringstream result;
+  ToHexDump(result, buf, size);
+  return result.str();
+}
+
+inline std::string ToHexDump(const std::vector<char> & buf)
+{
+  return ToHexDump(buf, buf.size());
+}
 
 
 }

@@ -22,9 +22,9 @@ using namespace OpcUa::Impl;
 class OpcUa::Impl::BufferedInput : public OpcUa::InputChannel
 {
 public:
-  explicit BufferedInput(bool debug);
-  virtual std::size_t Receive(char* data, std::size_t size);
-  void AddBuffer(const char* buf, std::size_t size);
+  explicit BufferedInput(const Common::Logger::SharedPtr & logger);
+  virtual std::size_t Receive(char * data, std::size_t size);
+  void AddBuffer(const char * buf, std::size_t size);
   void Stop();
 
 private:
@@ -35,69 +35,83 @@ private:
   std::atomic<bool> Running;
   std::mutex BufferMutex;
   std::condition_variable DataReady;
-  bool Debug;
+  Common::Logger::SharedPtr Logger;
 };
 
 
-BufferedInput::BufferedInput(bool debug)
+BufferedInput::BufferedInput(const Common::Logger::SharedPtr & logger)
   : Running(true)
-  , Debug(debug)
+  , Logger(logger)
 {
   Buffer.reserve(4096);
 }
 
-std::size_t BufferedInput::Receive(char* data, std::size_t size)
+std::size_t BufferedInput::Receive(char * data, std::size_t size)
 {
-  if (Debug) std::clog << "Consuming " << size << " bytes of data." << std::endl;
+  LOG_DEBUG(Logger, "consuming {} bytes of data", size);
 
   ThrowIfStopped();
 
 
   std::size_t totalConsumedSize = 0;
+
   while (totalConsumedSize < size)
-  {
-    std::unique_lock<std::mutex> event(BufferMutex);
-    if (Buffer.empty())
     {
-      if (Debug) std::clog << "Waiting data from client" << std::endl;
-      DataReady.wait(event);
-    }
-    else if(!event.owns_lock())
-    {
-      event.lock();
-    }
-    if (Debug) std::clog << "Buffer contain data from client." << std::endl;
-    ThrowIfStopped();
-    if (Debug) std::clog << "Client sent data." << std::endl;
+      std::unique_lock<std::mutex> event(BufferMutex);
 
-    ThrowIfStopped();
-    if (Buffer.empty())
-    {
-      if (Debug) std::clog << "No data in buffer." << std::endl;
-      continue;
-    }
+      if (Buffer.empty())
+        {
+          LOG_DEBUG(Logger, "waiting for client data");
 
-    const std::size_t sizeToConsume = std::min(size - totalConsumedSize, Buffer.size());
-    if (Debug) std::clog << "Consuming " << sizeToConsume << " bytes of data." << std::endl;
-    auto endIt = Buffer.begin() + sizeToConsume;
-    std::copy(begin(Buffer), endIt, data + totalConsumedSize);
-    Buffer.erase(Buffer.begin(), endIt); // TODO make behavior with round buffer to avoid this.
-    totalConsumedSize += sizeToConsume;
-  }
+          DataReady.wait(event);
+        }
+
+      else if (!event.owns_lock())
+        {
+          event.lock();
+        }
+
+      LOG_DEBUG(Logger, "buffer contains client data");
+
+      ThrowIfStopped();
+
+      LOG_DEBUG(Logger, "client sent data");
+
+      ThrowIfStopped();
+
+      if (Buffer.empty())
+        {
+          LOG_DEBUG(Logger, "buffer is empty");
+          continue;
+        }
+
+      const std::size_t sizeToConsume = std::min(size - totalConsumedSize, Buffer.size());
+
+      LOG_DEBUG(Logger, "consuming {} bytes of data", sizeToConsume);
+
+      auto endIt = Buffer.begin() + sizeToConsume;
+      std::copy(begin(Buffer), endIt, data + totalConsumedSize);
+      Buffer.erase(Buffer.begin(), endIt); // TODO make behavior with round buffer to avoid this.
+      totalConsumedSize += sizeToConsume;
+    }
 
   return totalConsumedSize;
 }
 
 
-void BufferedInput::AddBuffer(const char* buf, std::size_t size)
+void BufferedInput::AddBuffer(const char * buf, std::size_t size)
 {
   ThrowIfStopped();
-  if (Debug) std::clog << "Client want to send " << size << " bytes of data" << std::endl;
+
+  LOG_DEBUG(Logger, "client wants to send {} bytes of data", size);
+
   std::lock_guard<std::mutex> lock(BufferMutex);
   ThrowIfStopped();
 
   Buffer.insert(Buffer.end(), buf, buf + size);
-  if (Debug) std::clog << "Size of buffer " << Buffer.size() << " bytes." << std::endl;
+
+  LOG_DEBUG(Logger, "size of buffer is {} bytes", Buffer.size());
+
   DataReady.notify_all();
 }
 
@@ -110,83 +124,83 @@ void BufferedInput::Stop()
 void BufferedInput::ThrowIfStopped()
 {
   if (!Running)
-  {
-    throw std::logic_error("Conversation through connection stopped.");
-  }
+    {
+      throw std::logic_error("conversation through connection stopped");
+    }
 }
 
 
 namespace
 {
 
-  class BufferedIO : public OpcUa::IOChannel
+class BufferedIO : public OpcUa::IOChannel
+{
+public:
+  BufferedIO(const char * channelId, std::weak_ptr<InputChannel> input, std::weak_ptr<BufferedInput> output, const Common::Logger::SharedPtr & logger)
+    : Input(input)
+    , Output(output)
+    , Id(channelId)
+    , Logger(logger)
   {
-  public:
-    BufferedIO(const char* channelId, std::weak_ptr<InputChannel> input, std::weak_ptr<BufferedInput> output, bool debug)
-      : Input(input)
-      , Output(output)
-      , Id(channelId)
-      , Debug(debug)
-    {
-    }
+  }
 
-    virtual std::size_t Receive(char* data, std::size_t size)
-    {
-      if (Debug) std::clog << Id << ": receive data." << std::endl;
+  virtual std::size_t Receive(char * data, std::size_t size)
+  {
+    LOG_DEBUG(Logger, "{}: receive data", Id);
 
-      if (std::shared_ptr<InputChannel> input = Input.lock())
+    if (std::shared_ptr<InputChannel> input = Input.lock())
       {
         return input->Receive(data, size);
       }
-      return 0;
-    }
 
-    virtual void Send(const char* message, std::size_t size)
-    {
-      if (Debug) std::clog << Id << ": send data." << std::endl;
+    return 0;
+  }
 
-      if (std::shared_ptr<BufferedInput> output = Output.lock())
+  virtual void Send(const char * message, std::size_t size)
+  {
+    LOG_DEBUG(Logger, "{}: send data", Id);
+
+    if (std::shared_ptr<BufferedInput> output = Output.lock())
       {
         output->AddBuffer(message, size);
       }
-    }
-
-    virtual void Stop()
-    {
-      if (std::shared_ptr<BufferedInput> output = Output.lock())
-        output->Stop();
-
-      if (std::shared_ptr<InputChannel> input = Input.lock())
-        return input->Stop();
-    }
-
-  private:
-    std::weak_ptr<InputChannel> Input;
-    std::weak_ptr<BufferedInput> Output;
-    const std::string Id;
-    bool Debug;
-  };
-
-
-  void Process(std::shared_ptr<OpcUa::Server::IncomingConnectionProcessor> processor, std::shared_ptr<OpcUa::IOChannel> channel)
-  {
-    processor->Process(channel);
   }
+
+  virtual void Stop()
+  {
+    if (std::shared_ptr<BufferedInput> output = Output.lock())
+      { output->Stop(); }
+
+    if (std::shared_ptr<InputChannel> input = Input.lock())
+      { return input->Stop(); }
+  }
+
+private:
+  std::weak_ptr<InputChannel> Input;
+  std::weak_ptr<BufferedInput> Output;
+  const std::string Id;
+  Common::Logger::SharedPtr Logger;
+};
+
+
+void Process(std::shared_ptr<OpcUa::Server::IncomingConnectionProcessor> processor, std::shared_ptr<OpcUa::IOChannel> channel)
+{
+  processor->Process(channel);
+}
 }  // namespace
 
 
-
-BuiltinServerAddon::BuiltinServerAddon()
-  : Debug(false)
+BuiltinServerAddon::BuiltinServerAddon(const Common::Logger::SharedPtr & logger)
+  : TcpServer(logger)
 {
 }
 
 OpcUa::Services::SharedPtr BuiltinServerAddon::GetServices() const
 {
   if (!ClientChannel)
-  {
-    throw std::logic_error("Cannot access builtin computer. No endpoints was created. You have to configure endpoints.");
-  }
+    {
+      throw std::logic_error("Cannot access builtin computer. No endpoints was created. You have to configure endpoints.");
+    }
 
   OpcUa::SecureConnectionParams params;
   params.EndpointUrl = "opc.tcp://localhost:4841";
@@ -197,88 +211,99 @@ OpcUa::Services::SharedPtr BuiltinServerAddon::GetServices() const
 BuiltinServerAddon::~BuiltinServerAddon()
 {
   try
-  {
-    Stop();
-  }
+    {
+      Stop();
+    }
+
   catch (...)
-  {
-  }
+    {
+    }
 }
 
-void BuiltinServerAddon::Initialize(Common::AddonsManager& addons, const Common::AddonParameters& params)
+void BuiltinServerAddon::Initialize(Common::AddonsManager & addons, const Common::AddonParameters & params)
 {
-  for (const Common::Parameter parameter : params.Parameters)
-  {
-    if (parameter.Name == "debug" && !parameter.Value.empty() && parameter.Value != "0")
-    {
-      Debug = true;
-    }
-  }
+  Logger = addons.GetLogger();
 
-  const std::vector<OpcUa::Server::ApplicationData> applications = OpcUa::ParseEndpointsParameters(params.Groups, Debug);
-  for (OpcUa::Server::ApplicationData d: applications) {
-    std::cout << "Endpoint is: " << d.Endpoints.front().EndpointUrl << std::endl;
-  }
+  for (const Common::Parameter parameter : params.Parameters)
+    {
+      /*
+      if (parameter.Name == "debug" && !parameter.Value.empty() && parameter.Value != "0")
+        {
+          Debug = true;
+        }
+       */
+    }
+
+  const std::vector<OpcUa::Server::ApplicationData> applications = OpcUa::ParseEndpointsParameters(params.Groups, Logger);
+
+  for (OpcUa::Server::ApplicationData d : applications)
+    {
+      LOG_INFO(Logger, "endpoint is: {}", d.Endpoints.front().EndpointUrl);
+    }
 
   std::vector<OpcUa::ApplicationDescription> applicationDescriptions;
   std::vector<OpcUa::EndpointDescription> endpointDescriptions;
+
   for (const OpcUa::Server::ApplicationData application : applications)
-  {
-    applicationDescriptions.push_back(application.Application);
-    endpointDescriptions.insert(endpointDescriptions.end(), application.Endpoints.begin(), application.Endpoints.end());
-  }
+    {
+      applicationDescriptions.push_back(application.Application);
+      endpointDescriptions.insert(endpointDescriptions.end(), application.Endpoints.begin(), application.Endpoints.end());
+    }
 
   OpcUa::Server::EndpointsRegistry::SharedPtr endpointsAddon = addons.GetAddon<OpcUa::Server::EndpointsRegistry>(OpcUa::Server::EndpointsRegistryAddonId);
+
   if (!endpointsAddon)
-  {
-    std::cerr << "Cannot save information about endpoints. Endpoints services addon didn't' registered." << std::endl;
-    return;
-  }
+    {
+      LOG_ERROR(Logger, "cannot store endpoints information, endpoints service addon has not been registered");
+      return;
+    }
+
   endpointsAddon->AddEndpoints(endpointDescriptions);
   endpointsAddon->AddApplications(applicationDescriptions);
 
   OpcUa::Server::ServicesRegistry::SharedPtr internalServer = addons.GetAddon<OpcUa::Server::ServicesRegistry>(OpcUa::Server::ServicesRegistryAddonId);
 
-  Protocol = OpcUa::Server::CreateOpcUaProtocol(*this, Debug);
+  Protocol = OpcUa::Server::CreateOpcUaProtocol(*this, Logger);
   Protocol->StartEndpoints(endpointDescriptions, internalServer->GetServer());
 }
 
 void BuiltinServerAddon::Stop()
 {
   Protocol.reset();
+
   if (ClientInput)
-  {
-    ClientInput->Stop();
-    ServerInput->Stop();
-  }
+    {
+      ClientInput->Stop();
+      ServerInput->Stop();
+    }
 
   if (Thread.get())
-  {
-    Thread->Join();
-    Thread.reset();
-  }
+    {
+      Thread->Join();
+      Thread.reset();
+    }
 
   ClientInput.reset();
   ServerInput.reset();
 }
 
-void BuiltinServerAddon::Listen(const OpcUa::Server::TcpParameters&, std::shared_ptr<OpcUa::Server::IncomingConnectionProcessor> processor)
+void BuiltinServerAddon::Listen(const OpcUa::Server::TcpParameters &, std::shared_ptr<OpcUa::Server::IncomingConnectionProcessor> processor)
 {
   if (Thread)
-  {
-    throw std::logic_error("Unable to start second thread. Builtin computer can listen only one binary connection.");
-  }
+    {
+      throw std::logic_error("unable to serve more then one binary connection");
+    }
 
-  ServerInput.reset(new BufferedInput(Debug));
-  ClientInput.reset(new BufferedInput(Debug));
+  ServerInput.reset(new BufferedInput(Logger));
+  ClientInput.reset(new BufferedInput(Logger));
 
-  ClientChannel.reset(new BufferedIO("Client", ClientInput, ServerInput, Debug));
-  ServerChannel.reset(new BufferedIO("Server", ServerInput, ClientInput, Debug));
+  ClientChannel.reset(new BufferedIO("Client", ClientInput, ServerInput, Logger));
+  ServerChannel.reset(new BufferedIO("Server", ServerInput, ClientInput, Logger));
 
   Thread.reset(new Common::Thread(std::bind(Process, processor, ServerChannel), this));
 }
 
-void BuiltinServerAddon::StopListen(const OpcUa::Server::TcpParameters&)
+void BuiltinServerAddon::StopListen(const OpcUa::Server::TcpParameters &)
 {
   Stop();
 }
@@ -286,17 +311,19 @@ void BuiltinServerAddon::StopListen(const OpcUa::Server::TcpParameters&)
 void BuiltinServerAddon::OnSuccess()
 {
   ClientInput->Stop();
-  if (Debug) std::clog  << "Server thread exited with success." << std::endl;
+
+  LOG_DEBUG(Logger, "server thread exited successfully");
 }
 
-void BuiltinServerAddon::OnError(const std::exception& exc)
+void BuiltinServerAddon::OnError(const std::exception & exc)
 {
   ClientInput->Stop();
-  if (Debug) std::clog  << "Server thread exited with error: " << exc.what() << std::endl;
+
+  LOG_ERROR(Logger, "server thread exited with error: {}", exc.what());
 }
 
-OpcUa::Server::TcpServer::UniquePtr OpcUa::Server::CreateTcpServer()
+OpcUa::Server::TcpServer::UniquePtr OpcUa::Server::CreateTcpServer(const Common::Logger::SharedPtr & logger)
 {
-  return TcpServer::UniquePtr(new BuiltinServerAddon);
+  return TcpServer::UniquePtr(new BuiltinServerAddon(logger));
 }
 

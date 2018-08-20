@@ -27,180 +27,199 @@
 
 namespace OpcUa
 {
-  UaServer::UaServer()
-  {
-  }
+UaServer::UaServer()
+{
+}
 
-  UaServer::UaServer(bool debug)
-    : Debug(debug)
+UaServer::UaServer(bool debug)
+{
+  Logger = spdlog::get("UaServer");
+  if (!Logger)
   {
+    Logger = spdlog::stderr_color_mt("UaServer");
   }
-
-  void UaServer::SetEndpoint(const std::string& endpoint)
-  {
-	  Endpoint = endpoint;
-  }
-
-  void UaServer::SetProductURI(const std::string& uri)
-  {
-	  ProductUri = uri;
-  }
-
-  void UaServer::SetServerURI(const std::string& uri)
-  {
-	  ServerUri = uri;
-  }
-
-  void UaServer::SetServerName(const std::string& name)
-  {
-	  Name = name;
-  }
-
-  void UaServer::AddAddressSpace(const std::string& path)
-  {
-	  XmlAddressSpaces.push_back(path);
-  }
-
-  void UaServer::CheckStarted() const
-  {
-    if ( ! Registry )
+  if (debug)
     {
-      throw(std::runtime_error("Server is not started"));
+      Logger->set_level(spdlog::level::debug);
     }
-  }
-
-  uint32_t UaServer::RegisterNamespace(std::string uri)
-  {
-    CheckStarted();
-    Node namespacearray(Registry->GetServer(), ObjectId::Server_NamespaceArray);
-    std::vector<std::string> uris = namespacearray.GetValue().As<std::vector<std::string>>();
-    uint32_t index = uris.size();
-    uris.push_back(uri);
-    namespacearray.SetValue(uris);
-    return index;
-  }
-
-  uint32_t UaServer::GetNamespaceIndex(std::string uri)
-  {
-    CheckStarted();
-    Node namespacearray(Registry->GetServer(), ObjectId::Server_NamespaceArray);
-    std::vector<std::string> uris = namespacearray.GetValue().As<std::vector<std::string>>();;
-    for ( uint32_t i=0; i<uris.size(); ++i)
+  else
     {
-      if (uris[i] == uri )
-      {
-        return i;
-      }
+      Logger->set_level(spdlog::level::info);
     }
-    throw(std::runtime_error("Error namespace uri does not exists in server")); 
-    //return -1;
-  }
+}
 
-  void UaServer::Start()
-  {
-    ApplicationDescription appDesc;
-    appDesc.ApplicationName = LocalizedText(Name);
-    appDesc.ApplicationUri = ServerUri;
-    appDesc.ApplicationType = ApplicationType::Server;
-    appDesc.ProductUri = ProductUri;
+UaServer::UaServer(const Common::Logger::SharedPtr & logger)
+  : Logger(logger)
+{
+}
 
-    OpcUa::Server::Parameters params;
-    params.Debug = Debug;
-    params.Endpoint.Server = appDesc;
-    params.Endpoint.EndpointUrl = Endpoint;
-    params.Endpoint.SecurityMode = SecurityMode;
-    params.Endpoint.SecurityPolicyUri = "http://opcfoundation.org/UA/SecurityPolicy#None";
-    params.Endpoint.TransportProfileUri = "http://opcfoundation.org/UA-Profile/Transport/uatcp-uasc-uabinary";
-    //setting up policy is required for some client, this should be in a constructor
-    UserTokenPolicy policy;
-    policy.TokenType = UserTokenType::Anonymous;
-    params.Endpoint.UserIdentityTokens.push_back(policy);
+void UaServer::SetEndpoint(const std::string & endpoint)
+{
+  Endpoint = endpoint;
+}
 
-    Addons = Common::CreateAddonsManager();
-    Server::RegisterCommonAddons(params, *Addons);
-    Addons->Start();
+void UaServer::SetProductURI(const std::string & uri)
+{
+  ProductUri = uri;
+}
 
-    Registry = Addons->GetAddon<Server::ServicesRegistry>(Server::ServicesRegistryAddonId);
-    SubscriptionService = Addons->GetAddon<Server::SubscriptionService>(Server::SubscriptionServiceAddonId);
+void UaServer::SetServerURI(const std::string & uri)
+{
+  ServerUri = uri;
+}
 
-    Node ServerArray = GetNode(OpcUa::ObjectId::Server_ServerArray);
-    ServerArray.SetValue(std::vector<std::string>({Endpoint}));
+void UaServer::SetServerName(const std::string & name)
+{
+  Name = name;
+}
 
-    EnableEventNotification(); //Enabling event notification, it probably does hurt anyway and users will forgot to set it up
-  }
+void UaServer::AddAddressSpace(const std::string & path)
+{
+  XmlAddressSpaces.push_back(path);
+}
 
-  Node UaServer::GetNode(const std::string& nodeid) const
-  {
-    return GetNode(ToNodeId(nodeid));
-  }
+void UaServer::CheckStarted() const
+{
+  if (!Registry)
+    {
+      throw (std::runtime_error("Server is not started"));
+    }
+}
 
-  Node UaServer::GetNode(const NodeId& nodeid) const
-  {
-    CheckStarted();
-    return Node(Registry->GetServer(), nodeid);
-  }
+uint32_t UaServer::RegisterNamespace(std::string uri)
+{
+  CheckStarted();
+  Node namespacearray(Registry->GetServer(), ObjectId::Server_NamespaceArray);
+  std::vector<std::string> uris = namespacearray.GetValue().As<std::vector<std::string>>();
+  uint32_t index = uris.size();
+  uris.push_back(uri);
+  namespacearray.SetValue(uris);
+  return index;
+}
 
-  Node UaServer::GetNodeFromPath(const std::vector<QualifiedName>& path) const
-  {
-    return GetRootNode().GetChild(path);
-  }
+uint32_t UaServer::GetNamespaceIndex(std::string uri)
+{
+  CheckStarted();
+  Node namespacearray(Registry->GetServer(), ObjectId::Server_NamespaceArray);
+  std::vector<std::string> uris = namespacearray.GetValue().As<std::vector<std::string>>();;
 
-  Node UaServer::GetNodeFromPath(const std::vector<std::string>& path) const
-  {
-    return GetRootNode().GetChild(path);
-  }
+  for (uint32_t i = 0; i < uris.size(); ++i)
+    {
+      if (uris[i] == uri)
+        {
+          return i;
+        }
+    }
 
-  void UaServer::Stop()
-  {
-    std::cout << "Stopping opcua server application" << std::endl;
-    CheckStarted();
-    Addons->Stop();
-  }
+  throw (std::runtime_error("Error namespace uri does not exists in server"));
+  //return -1;
+}
 
-  Node UaServer::GetRootNode() const
-  {
-    return GetNode(OpcUa::ObjectId::RootFolder);
-  }
+void UaServer::Start()
+{
+  ApplicationDescription appDesc;
+  appDesc.ApplicationName = LocalizedText(Name);
+  appDesc.ApplicationUri = ServerUri;
+  appDesc.ApplicationType = ApplicationType::Server;
+  appDesc.ProductUri = ProductUri;
 
-  Node UaServer::GetObjectsNode() const
-  {
-    return GetNode(ObjectId::ObjectsFolder);
-  }
+  OpcUa::Server::Parameters params;
+  params.Debug = Logger.get();
+  params.Endpoint.Server = appDesc;
+  params.Endpoint.EndpointUrl = Endpoint;
+  params.Endpoint.SecurityMode = SecurityMode;
+  params.Endpoint.SecurityPolicyUri = "http://opcfoundation.org/UA/SecurityPolicy#None";
+  params.Endpoint.TransportProfileUri = "http://opcfoundation.org/UA-Profile/Transport/uatcp-uasc-uabinary";
+  //setting up policy is required for some client, this should be in a constructor
+  UserTokenPolicy policy;
+  policy.TokenType = UserTokenType::Anonymous;
+  params.Endpoint.UserIdentityTokens.push_back(policy);
 
-  Node UaServer::GetServerNode() const
-  {
-    return GetNode(ObjectId::Server);
-  }
+  Addons = Common::CreateAddonsManager(Logger);
+  Server::RegisterCommonAddons(params, *Addons);
+  Addons->Start();
 
-  void UaServer::EnableEventNotification()
-  {
-    Node server = GetServerNode();
-    
-    uint8_t notifierval = 0;
-    notifierval |= EventNotifier::SubscribeToEvents;
+  Registry = Addons->GetAddon<Server::ServicesRegistry>(Server::ServicesRegistryAddonId);
+  SubscriptionService = Addons->GetAddon<Server::SubscriptionService>(Server::SubscriptionServiceAddonId);
 
-    DataValue dval(notifierval);
-    dval.SetSourceTimestamp(DateTime::Current());
+  Node ServerArray = GetNode(OpcUa::ObjectId::Server_ServerArray);
+  ServerArray.SetValue(std::vector<std::string>({Endpoint}));
 
-    server.SetAttribute(AttributeId::EventNotifier, dval);
-  }
+  EnableEventNotification(); //Enabling event notification, it probably does hurt anyway and users will forgot to set it up
+}
 
-  std::unique_ptr<Subscription> UaServer::CreateSubscription(unsigned int period, SubscriptionHandler& callback)
-  {
-    CheckStarted();
-    CreateSubscriptionParameters params;
-    params.RequestedPublishingInterval = period;
-    return std::unique_ptr<Subscription>(new Subscription (Registry->GetServer(), params, callback, Debug));
-  }
+Node UaServer::GetNode(const std::string & nodeid) const
+{
+  return GetNode(ToNodeId(nodeid));
+}
 
-  ServerOperations UaServer::CreateServerOperations()
-  {
-	  return std::move(ServerOperations(Registry->GetServer()));
-  }
+Node UaServer::GetNode(const NodeId & nodeid) const
+{
+  CheckStarted();
+  return Node(Registry->GetServer(), nodeid);
+}
 
-  void UaServer::TriggerEvent(Event event)
-  {
-    SubscriptionService->TriggerEvent(ObjectId::Server, event);
-  }
+Node UaServer::GetNodeFromPath(const std::vector<QualifiedName> & path) const
+{
+  return GetRootNode().GetChild(path);
+}
+
+Node UaServer::GetNodeFromPath(const std::vector<std::string> & path) const
+{
+  return GetRootNode().GetChild(path);
+}
+
+void UaServer::Stop()
+{
+  LOG_INFO(Logger, "UaServer | stopping opcua server application");
+  CheckStarted();
+  Addons->Stop();
+}
+
+Node UaServer::GetRootNode() const
+{
+  return GetNode(OpcUa::ObjectId::RootFolder);
+}
+
+Node UaServer::GetObjectsNode() const
+{
+  return GetNode(ObjectId::ObjectsFolder);
+}
+
+Node UaServer::GetServerNode() const
+{
+  return GetNode(ObjectId::Server);
+}
+
+void UaServer::EnableEventNotification()
+{
+  Node server = GetServerNode();
+
+  uint8_t notifierval = 0;
+  notifierval |= EventNotifier::SubscribeToEvents;
+
+  DataValue dval(notifierval);
+  dval.SetSourceTimestamp(DateTime::Current());
+
+  server.SetAttribute(AttributeId::EventNotifier, dval);
+}
+
+Subscription::SharedPtr UaServer::CreateSubscription(unsigned int period, SubscriptionHandler & callback)
+{
+  CheckStarted();
+  CreateSubscriptionParameters params;
+  params.RequestedPublishingInterval = period;
+  return std::make_shared<Subscription>(Registry->GetServer(), params, callback, Logger);
+}
+
+ServerOperations UaServer::CreateServerOperations()
+{
+  return ServerOperations(Registry->GetServer());
+}
+
+void UaServer::TriggerEvent(Event event)
+{
+  SubscriptionService->TriggerEvent(ObjectId::Server, event);
+}
 
 }

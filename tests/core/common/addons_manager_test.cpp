@@ -4,11 +4,12 @@
 /// @license GNU LGPL
 ///
 /// Distributed under the GNU LGPL License
-/// (See accompanying file LICENSE or copy at 
+/// (See accompanying file LICENSE or copy at
 /// http://www.gnu.org/licenses/lgpl.html)
 ///
 
 #include <opc/common/exception.h>
+#include <opc/common/logger.h>
 #include <opc/common/addons_core/addon.h>
 #include <opc/common/addons_core/addon_manager.h>
 #include <opc/managers/device_manager/id.h>
@@ -24,9 +25,12 @@ class AddonsManagerTestCase : public CPPUNIT_NS::TestFixture
   CPPUNIT_TEST(TestOneManager);
   CPPUNIT_TEST_SUITE_END();
 
- public:
+public:
   virtual void setUp()
   {
+    spdlog::drop_all();
+    Logger = spdlog::stderr_color_mt("test");
+    Logger->set_level(spdlog::level::info);
     Addons = Common::CreateAddonsManager();
   }
 
@@ -35,6 +39,7 @@ class AddonsManagerTestCase : public CPPUNIT_NS::TestFixture
     Addons.reset();
   }
 protected:
+  Common::Logger::SharedPtr Logger;
   Common::AddonsManager::UniquePtr Addons;
 
 
@@ -43,7 +48,7 @@ protected:
   void TestTwoManagers();
 };
 
-CPPUNIT_TEST_SUITE_REGISTRATION( AddonsManagerTestCase );
+CPPUNIT_TEST_SUITE_REGISTRATION(AddonsManagerTestCase);
 
 unsigned InitializedAddonsCount = 0;
 
@@ -61,13 +66,13 @@ public:
   {
   }
 
-  virtual void Initialize(Common::AddonsManager&, const Common::AddonParameters&)
+  virtual void Initialize(Common::AddonsManager &, const Common::AddonParameters &)
   {
     CPPUNIT_ASSERT(InitializedAddonsCount == 0);
     InitializedAddonsCount++;
     Initialized = true;
   }
-  
+
   virtual void Stop()
   {
     Stopped = true;
@@ -106,13 +111,13 @@ public:
   {
   }
 
-  virtual void Initialize(Common::AddonsManager&, const Common::AddonParameters&)
+  virtual void Initialize(Common::AddonsManager &, const Common::AddonParameters &)
   {
     CPPUNIT_ASSERT(InitializedAddonsCount == 1);
     InitializedAddonsCount++;
     Initialized = true;
   }
-  
+
   virtual void Stop()
   {
     Stopped = true;
@@ -122,7 +127,7 @@ public:
   {
     return Initialized;
   }
- 
+
   bool IsStopped() const
   {
     return Stopped;
@@ -159,7 +164,7 @@ void AddonsManagerTestCase::TestOneManager()
   CPPUNIT_ASSERT_NO_THROW(propertyTree = Common::GetAddon<PropertyTreeAddon>(*Addons, PropertyTree::ManagerId));
   CPPUNIT_ASSERT(propertyTree);
   CPPUNIT_ASSERT(propertyTree->IsInitialized());
-  
+
   CPPUNIT_ASSERT_NO_THROW(Addons->Stop());
   CPPUNIT_ASSERT(propertyTree->IsStopped());
 
@@ -191,7 +196,7 @@ void AddonsManagerTestCase::TestTwoManagers()
   CPPUNIT_ASSERT_NO_THROW(propertyTree = Common::GetAddon<PropertyTreeAddon>(*Addons, PropertyTree::ManagerId));
   CPPUNIT_ASSERT(propertyTree);
   CPPUNIT_ASSERT(propertyTree->IsInitialized());
-  
+
   std::shared_ptr<DeviceIOManagerAddon> deviceManager;
   CPPUNIT_ASSERT_NO_THROW(deviceManager = Common::GetAddon<DeviceIOManagerAddon>(*Addons, DeviceManager::ManagerId));
   CPPUNIT_ASSERT(deviceManager);

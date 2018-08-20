@@ -15,14 +15,16 @@
 
 namespace OpcUa
 {
-  enum class VariableAccessLevel : uint8_t
-  {
-    CurrentRead  = 1,
-    CurrentWrite = 2,
-    HistoryRead  = 4,
-    HistoryWrite = 8,
-    SemanticChange = 16,
-  };
+enum class VariableAccessLevel : uint8_t
+{
+  CurrentRead  = 1,
+  CurrentWrite = 2,
+  HistoryRead  = 4,
+  HistoryWrite = 8,
+  SemanticChange = 16,
+};
+inline VariableAccessLevel operator|(VariableAccessLevel a, VariableAccessLevel b) { return static_cast<VariableAccessLevel>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b)); }
+inline VariableAccessLevel operator&(VariableAccessLevel a, VariableAccessLevel b) { return static_cast<VariableAccessLevel>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b)); }
 }
 
 #endif /* OPC_UA_VARIABLE_ACCESS_LEVEL_H_ */

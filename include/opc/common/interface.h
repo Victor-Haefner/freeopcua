@@ -4,7 +4,7 @@
 /// @license GNU LGPL
 ///
 /// Distributed under the GNU LGPL License
-/// (See accompanying file LICENSE or copy at 
+/// (See accompanying file LICENSE or copy at
 /// http://www.gnu.org/licenses/lgpl.html)
 ///
 
@@ -14,17 +14,16 @@
 namespace Common
 {
 
-  class Interface
-  {
-  protected:
-    Interface(){}
-    // c++11 destructors default to noexcept
-    // allow implementations to do so.
-    virtual ~Interface() noexcept (false) {}
+class Interface
+{
+protected:
+  Interface() {}
 
-    Interface(const Interface&) = delete;
-    const Interface& operator=(const Interface&) = delete;
-  };
+  virtual ~Interface() {}
+
+  Interface(const Interface &) = delete;
+  const Interface & operator=(const Interface &) = delete;
+};
 
 }
 

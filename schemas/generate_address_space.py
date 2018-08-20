@@ -22,7 +22,7 @@ class ObjectStruct(object):
 
         #variable
         self.datatype = None
-        self.rank = -1 # checl default value
+        self.rank = -1 # check default value
         self.value = []
         self.dimensions = None
         self.accesslevel = None 
@@ -85,6 +85,26 @@ class CodeGenerator(object):
                 self.make_datatype_code(node)
             else:
                 sys.stderr.write("Not implemented node type: " + child.tag[51:] + "\n")
+        self.writecode('''
+void CreateAddressSpace%s(OpcUa::NodeManagementServices & registry)
+{''' % (self.part))
+        for child in root:
+            if child.tag[51:] == 'UAObject':
+                pass
+            elif child.tag[51:] == 'UAObjectType':
+                pass
+            elif child.tag[51:] == 'UAVariable':
+                pass
+            elif child.tag[51:] == 'UAVariableType':
+                pass
+            elif child.tag[51:] == 'UAReferenceType':
+                pass
+            elif child.tag[51:] == 'UADataType':
+                pass
+            else:
+                continue
+            node = self.parse_node(child)
+            self.writecode(" ", 'create_{}(registry);'.format(node.nodeid[2:]))
         self.make_footer()
 
     def writecode(self, *args):
@@ -108,16 +128,14 @@ class CodeGenerator(object):
 #include <map>
 
 namespace OpcUa
-{
-  void CreateAddressSpace%s(OpcUa::NodeManagementServices& registry)
-  {''' % (self.part))
+{''')
 
     def make_footer(self, ):
         self.writecode('''
-   }
+}
 
 } // namespace
-    ''')
+''')
 
 
     def parse_node(self, child):
@@ -229,9 +247,9 @@ namespace OpcUa
         if obj.typedef: self.writecode(indent, 'node.TypeDefinition = ToNodeId("{}");'.format(obj.typedef))
 
     def to_vector(self, dims):
-        s = "std::vector<uint32_t>{"
-        s += dims
-        s+= "}"
+        s = "std::vector<uint32_t> {"
+        s += dims.replace(',', ', ')
+        s += "}"
         return s
 
     def to_data_type(self, nodeid):
@@ -249,38 +267,41 @@ namespace OpcUa
             return 'ReferenceId::{}'.format(nodeid)
 
     def make_object_code(self, obj):
-        indent = "       "
-        self.writecode(indent)
-        self.writecode(indent, "{")
+        indent = " "
+        self.writecode("")
+        self.writecode('static void create_{}(OpcUa::NodeManagementServices & registry)'.format(obj.nodeid[2:]))
+        self.writecode("{")
         self.make_node_code(obj, indent)
         self.writecode(indent, 'ObjectAttributes attrs;')
         if obj.desc: self.writecode(indent, 'attrs.Description = LocalizedText("{}");'.format(obj.desc))
         self.writecode(indent, 'attrs.DisplayName = LocalizedText("{}");'.format(obj.displayname))
         self.writecode(indent, 'attrs.EventNotifier = {};'.format(obj.eventnotifier))
         self.writecode(indent, 'node.Attributes = attrs;')
-        self.writecode(indent, 'registry.AddNodes(std::vector<AddNodesItem>{node});')
+        self.writecode(indent, 'registry.AddNodes(std::vector<AddNodesItem> {node});')
         self.make_refs_code(obj, indent)
-        self.writecode(indent, "}")
+        self.writecode("}")
 
     def make_object_type_code(self, obj):
-        indent = "       "
-        self.writecode(indent)
-        self.writecode(indent, "{")
+        indent = " "
+        self.writecode("")
+        self.writecode('static void create_{}(OpcUa::NodeManagementServices & registry)'.format(obj.nodeid[2:]))
+        self.writecode("{")
         self.make_node_code(obj, indent)
         self.writecode(indent, 'ObjectTypeAttributes attrs;')
         if obj.desc: self.writecode(indent, 'attrs.Description = LocalizedText("{}");'.format(obj.desc))
         self.writecode(indent, 'attrs.DisplayName = LocalizedText("{}");'.format(obj.displayname))
         self.writecode(indent, 'attrs.IsAbstract = {};'.format(obj.abstract))
         self.writecode(indent, 'node.Attributes = attrs;')
-        self.writecode(indent, 'registry.AddNodes(std::vector<AddNodesItem>{node});')
+        self.writecode(indent, 'registry.AddNodes(std::vector<AddNodesItem> {node});')
         self.make_refs_code(obj, indent)
-        self.writecode(indent, "}")
+        self.writecode("}")
 
 
     def make_variable_code(self, obj):
-        indent = "       "
-        self.writecode(indent)
-        self.writecode(indent, "{")
+        indent = " "
+        self.writecode("")
+        self.writecode('static void create_{}(OpcUa::NodeManagementServices & registry)'.format(obj.nodeid[2:]))
+        self.writecode("{")
         self.make_node_code(obj, indent)
         self.writecode(indent, 'VariableAttributes attrs;')
         if obj.desc: self.writecode(indent, 'attrs.Description = LocalizedText("{}");'.format(obj.desc))
@@ -293,14 +314,15 @@ namespace OpcUa
         if obj.minsample: self.writecode(indent, 'attrs.MinimumSamplingInterval = {};'.format(obj.minsample))
         if obj.dimensions: self.writecode(indent, 'attrs.Dimensions = {};'.format(self.to_vector(obj.dimensions)))
         self.writecode(indent, 'node.Attributes = attrs;')
-        self.writecode(indent, 'registry.AddNodes(std::vector<AddNodesItem>{node});')
+        self.writecode(indent, 'registry.AddNodes(std::vector<AddNodesItem> {node});')
         self.make_refs_code(obj, indent)
-        self.writecode(indent, "}")
+        self.writecode("}")
 
     def make_variable_type_code(self, obj):
-        indent = "       "
-        self.writecode(indent)
-        self.writecode(indent, "{")
+        indent = " "
+        self.writecode("")
+        self.writecode('static void create_{}(OpcUa::NodeManagementServices & registry)'.format(obj.nodeid[2:]))
+        self.writecode("{")
         self.make_node_code(obj, indent)
         self.writecode(indent, 'VariableTypeAttributes attrs;')
         if obj.desc: self.writecode(indent, 'attrs.Description = LocalizedText("{}");'.format(obj.desc))
@@ -311,16 +333,17 @@ namespace OpcUa
         if obj.abstract: self.writecode(indent, 'attrs.IsAbstract = {};'.format(obj.abstract))
         if obj.dimensions: self.writecode(indent, 'attrs.Dimensions = {};'.format(self.to_vector(obj.dimensions)))
         self.writecode(indent, 'node.Attributes = attrs;')
-        self.writecode(indent, 'registry.AddNodes(std::vector<AddNodesItem>{node});')
+        self.writecode(indent, 'registry.AddNodes(std::vector<AddNodesItem> {node});')
         self.make_refs_code(obj, indent)
-        self.writecode(indent, "}")
+        self.writecode("}")
 
 
 
     def make_reference_code(self, obj):
-        indent = "       "
-        self.writecode(indent)
-        self.writecode(indent, "{")
+        indent = " "
+        self.writecode("")
+        self.writecode('static void create_{}(OpcUa::NodeManagementServices & registry)'.format(obj.nodeid[2:]))
+        self.writecode("{")
         self.make_node_code(obj, indent)
         self.writecode(indent, 'ReferenceTypeAttributes attrs;')
         if obj.desc: self.writecode(indent, 'attrs.Description = LocalizedText("{}");'.format(obj.desc))
@@ -329,23 +352,24 @@ namespace OpcUa
         if obj.abstract: self.writecode(indent, 'attrs.IsAbstract = {};'.format(obj.abstract))
         if obj.symmetric: self.writecode(indent, 'attrs.Symmetric = {};'.format(obj.symmetric))
         self.writecode(indent, 'node.Attributes = attrs;')
-        self.writecode(indent, 'registry.AddNodes(std::vector<AddNodesItem>{node});')
+        self.writecode(indent, 'registry.AddNodes(std::vector<AddNodesItem> {node});')
         self.make_refs_code(obj, indent)
-        self.writecode(indent, "}")
+        self.writecode("}")
 
     def make_datatype_code(self, obj):
-        indent = "       "
-        self.writecode(indent)
-        self.writecode(indent, "{")
+        indent = " "
+        self.writecode("")
+        self.writecode('static void create_{}(OpcUa::NodeManagementServices & registry)'.format(obj.nodeid[2:]))
+        self.writecode("{")
         self.make_node_code(obj, indent)
         self.writecode(indent, 'DataTypeAttributes attrs;')
         if obj.desc: self.writecode(indent, u'attrs.Description = LocalizedText("{}");'.format(obj.desc))
         self.writecode(indent, 'attrs.DisplayName = LocalizedText("{}");'.format(obj.displayname))
         if obj.abstract: self.writecode(indent, 'attrs.IsAbstract = {};'.format(obj.abstract))
         self.writecode(indent, 'node.Attributes = attrs;')
-        self.writecode(indent, 'registry.AddNodes(std::vector<AddNodesItem>{node});')
+        self.writecode(indent, 'registry.AddNodes(std::vector<AddNodesItem> {node});')
         self.make_refs_code(obj, indent)
-        self.writecode(indent, "}")
+        self.writecode("}")
 
     def make_refs_code(self, obj, indent):
         if not obj.refs:
@@ -353,13 +377,14 @@ namespace OpcUa
         self.writecode(indent, "std::vector<AddReferencesItem> refs;")
         for ref in obj.refs:
             self.writecode(indent, "{")
-            self.writecode(indent, 'AddReferencesItem ref;')
-            self.writecode(indent, 'ref.IsForward = true;')
-            self.writecode(indent, 'ref.ReferenceTypeId = {};'.format(self.to_ref_type(ref.reftype)))
-            self.writecode(indent, 'ref.SourceNodeId = ToNodeId("{}");'.format(obj.nodeid))
-            self.writecode(indent, 'ref.TargetNodeClass = NodeClass::DataType;')
-            self.writecode(indent, 'ref.TargetNodeId = ToNodeId("{}");'.format(ref.target))
-            self.writecode(indent, "refs.push_back(ref);")
+            localIndent = indent + "  "
+            self.writecode(localIndent, 'AddReferencesItem ref;')
+            self.writecode(localIndent, 'ref.IsForward = true;')
+            self.writecode(localIndent, 'ref.ReferenceTypeId = {};'.format(self.to_ref_type(ref.reftype)))
+            self.writecode(localIndent, 'ref.SourceNodeId = ToNodeId("{}");'.format(obj.nodeid))
+            self.writecode(localIndent, 'ref.TargetNodeClass = NodeClass::DataType;')
+            self.writecode(localIndent, 'ref.TargetNodeId = ToNodeId("{}");'.format(ref.target))
+            self.writecode(localIndent, "refs.push_back(ref);")
             self.writecode(indent, "}")
         self.writecode(indent, 'registry.AddReferences(refs);')
 

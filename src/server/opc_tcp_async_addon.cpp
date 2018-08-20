@@ -33,99 +33,105 @@
 
 namespace
 {
-  using namespace OpcUa::Server;
+using namespace OpcUa::Server;
 
-  class AsyncOpcTcpAddon : public Common::Addon
-  {
-  public:
-    DEFINE_CLASS_POINTERS(AsyncOpcTcpAddon)
+class AsyncOpcTcpAddon : public Common::Addon
+{
+public:
+  DEFINE_CLASS_POINTERS(AsyncOpcTcpAddon)
 
-  public:
-    virtual void Initialize(Common::AddonsManager& addons, const Common::AddonParameters& params) override;
-    virtual void Stop() override;
+public:
+  virtual void Initialize(Common::AddonsManager & addons, const Common::AddonParameters & params) override;
+  virtual void Stop() override;
 
-  public:
-    void PublishApplicationsInformation(std::vector<OpcUa::ApplicationDescription> applications, std::vector<OpcUa::EndpointDescription> endpoints, const Common::AddonsManager& addons) const;
+public:
+  void PublishApplicationsInformation(std::vector<OpcUa::ApplicationDescription> applications, std::vector<OpcUa::EndpointDescription> endpoints, const Common::AddonsManager & addons) const;
 
-  private:
-    AsyncOpcTcp::SharedPtr Endpoint;
-  };
+private:
+  Common::Logger::SharedPtr Logger;
+  AsyncOpcTcp::SharedPtr Endpoint;
+};
 
 
-  void AsyncOpcTcpAddon::Initialize(Common::AddonsManager& addons, const Common::AddonParameters& addonParams)
-  {
-    AsyncOpcTcp::Parameters params = GetOpcTcpParameters(addonParams);
-    if (params.DebugMode)
+void AsyncOpcTcpAddon::Initialize(Common::AddonsManager & addons, const Common::AddonParameters & addonParams)
+{
+  Logger = addons.GetLogger();
+  AsyncOpcTcp::Parameters params = GetOpcTcpParameters(addonParams);
+
+  LOG_DEBUG(Logger, "opc_tcp_async         | parameters:");
+  LOG_DEBUG(Logger, "opc_tcp_async         |   DebugMode: {}", params.DebugMode);
+
+  const std::vector<OpcUa::Server::ApplicationData> applications = OpcUa::ParseEndpointsParameters(addonParams.Groups, Logger);
+
+  if (Logger && Logger->should_log(spdlog::level::debug))
     {
-      std::cout << "opc_tcp_async| Parameters:" << std::endl;
-      std::cout << "opc_tcp_async|   Debug mode: " << params.DebugMode << std::endl;
-    }
-    const std::vector<OpcUa::Server::ApplicationData> applications = OpcUa::ParseEndpointsParameters(addonParams.Groups, params.DebugMode);
-    if (params.DebugMode)
-    {
-      for (OpcUa::Server::ApplicationData d: applications)
-      {
-        std::cout << "opc_tcp_async| Endpoint is: " << d.Endpoints.front().EndpointUrl << std::endl;
-      }
+      for (OpcUa::Server::ApplicationData d : applications)
+        {
+          Logger->debug("opc_tcp_async         | Endpoint is: {}", d.Endpoints.front().EndpointUrl);
+        }
     }
 
-    std::vector<OpcUa::ApplicationDescription> applicationDescriptions;
-    std::vector<OpcUa::EndpointDescription> endpointDescriptions;
-    for (const OpcUa::Server::ApplicationData application : applications)
+  std::vector<OpcUa::ApplicationDescription> applicationDescriptions;
+  std::vector<OpcUa::EndpointDescription> endpointDescriptions;
+
+  for (const OpcUa::Server::ApplicationData application : applications)
     {
       applicationDescriptions.push_back(application.Application);
       endpointDescriptions.insert(endpointDescriptions.end(), application.Endpoints.begin(), application.Endpoints.end());
     }
 
-    if (endpointDescriptions.empty())
+  if (endpointDescriptions.empty())
     {
-      std::cerr << "opc_tcp_async| Endpoints parameters does not present in the configuration file." << std::endl;
-      return;
-    }
-    if (endpointDescriptions.size() > 1)
-    {
-      std::cerr << "opc_tcp_async| Too many endpoints specified in the configuration file." << std::endl;
+      LOG_ERROR(Logger, "opc_tcp_async         | Endpoints parameter not present in configuration");
       return;
     }
 
-    PublishApplicationsInformation(applicationDescriptions, endpointDescriptions, addons);
-    OpcUa::Server::ServicesRegistry::SharedPtr internalServer = addons.GetAddon<OpcUa::Server::ServicesRegistry>(OpcUa::Server::ServicesRegistryAddonId);
-    OpcUa::Server::AsioAddon::SharedPtr asio = addons.GetAddon<OpcUa::Server::AsioAddon>(OpcUa::Server::AsioAddonId);
-
-    params.Port = Common::Uri(endpointDescriptions[0].EndpointUrl).Port();
-    Endpoint = CreateAsyncOpcTcp(params, internalServer->GetServer(), asio->GetIoService());
-    Endpoint->Listen();
-  }
-
-  void AsyncOpcTcpAddon::PublishApplicationsInformation(std::vector<OpcUa::ApplicationDescription> applications, std::vector<OpcUa::EndpointDescription> endpoints, const Common::AddonsManager& addons) const
-  {
-    OpcUa::Server::EndpointsRegistry::SharedPtr endpointsAddon = addons.GetAddon<OpcUa::Server::EndpointsRegistry>(OpcUa::Server::EndpointsRegistryAddonId);
-    if (!endpointsAddon)
+  if (endpointDescriptions.size() > 1)
     {
-      std::cerr << "Cannot publish information about endpoints. Endpoints services addon didn't' registered." << std::endl;
+      LOG_ERROR(Logger, "opc_tcp_async         | too many endpoints specified in configuration");
       return;
     }
-    endpointsAddon->AddEndpoints(endpoints);
-    endpointsAddon->AddApplications(applications);
-  }
 
-  void AsyncOpcTcpAddon::Stop()
-  {
-    Endpoint->Shutdown();
-    Endpoint.reset();
-  }
+  PublishApplicationsInformation(applicationDescriptions, endpointDescriptions, addons);
+  OpcUa::Server::ServicesRegistry::SharedPtr internalServer = addons.GetAddon<OpcUa::Server::ServicesRegistry>(OpcUa::Server::ServicesRegistryAddonId);
+  OpcUa::Server::AsioAddon::SharedPtr asio = addons.GetAddon<OpcUa::Server::AsioAddon>(OpcUa::Server::AsioAddonId);
+
+  params.Port = Common::Uri(endpointDescriptions[0].EndpointUrl).Port();
+  Endpoint = CreateAsyncOpcTcp(params, internalServer->GetServer(), asio->GetIoService(), Logger);
+  Endpoint->Listen();
+}
+
+void AsyncOpcTcpAddon::PublishApplicationsInformation(std::vector<OpcUa::ApplicationDescription> applications, std::vector<OpcUa::EndpointDescription> endpoints, const Common::AddonsManager & addons) const
+{
+  OpcUa::Server::EndpointsRegistry::SharedPtr endpointsAddon = addons.GetAddon<OpcUa::Server::EndpointsRegistry>(OpcUa::Server::EndpointsRegistryAddonId);
+
+  if (!endpointsAddon)
+    {
+      LOG_ERROR(Logger, "opc_tcp_async         | cannot publish information about endpoints. Endpoints services addon not registered.");
+      return;
+    }
+
+  endpointsAddon->AddEndpoints(endpoints);
+  endpointsAddon->AddApplications(applications);
+}
+
+void AsyncOpcTcpAddon::Stop()
+{
+  Endpoint->Shutdown();
+  Endpoint.reset();
+}
 
 }
 
 namespace OpcUa
 {
-  namespace Server
-  {
+namespace Server
+{
 
-    Common::Addon::UniquePtr AsyncOpcTcpAddonFactory::CreateAddon()
-    {
-      return Common::Addon::UniquePtr(new AsyncOpcTcpAddon());
-    }
+Common::Addon::UniquePtr AsyncOpcTcpAddonFactory::CreateAddon()
+{
+  return Common::Addon::UniquePtr(new AsyncOpcTcpAddon());
+}
 
-  }
+}
 }

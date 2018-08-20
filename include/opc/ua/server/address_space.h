@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <opc/common/logger.h>
 #include <opc/ua/event.h>
 #include <opc/ua/services/attributes.h>
 #include <opc/ua/services/node_management.h>
@@ -19,29 +20,29 @@
 
 namespace OpcUa
 {
-  namespace Server
-  {
+namespace Server
+{
 
-    typedef void DataChangeCallback(const NodeId& node, AttributeId attribute, DataValue);
+typedef void DataChangeCallback(const NodeId & node, AttributeId attribute, DataValue);
 
-    class AddressSpace
-      : public ViewServices
-      , public AttributeServices
-      , public NodeManagementServices
-      , public MethodServices
-    {
-    public:
-      DEFINE_CLASS_POINTERS(AddressSpace)
-      
-      //Server side methods
-      virtual uint32_t AddDataChangeCallback(const NodeId& node, AttributeId attribute, std::function<DataChangeCallback> callback) = 0;
-      virtual void DeleteDataChangeCallback(uint32_t clienthandle) = 0;
-      virtual StatusCode SetValueCallback(const NodeId& node, AttributeId attribute, std::function<DataValue(void)> callback) = 0;
-      virtual void SetMethod(const NodeId& node, std::function<std::vector<OpcUa::Variant> (NodeId context, std::vector<OpcUa::Variant> arguments)> callback) = 0;
-      //FIXME : SHould we also expose SetValue and GetValue on server side? then we need to lock them ...
-    };
+class AddressSpace
+  : public ViewServices
+  , public AttributeServices
+  , public NodeManagementServices
+  , public MethodServices
+{
+public:
+  DEFINE_CLASS_POINTERS(AddressSpace)
 
-    AddressSpace::UniquePtr CreateAddressSpace(bool debug);
+  //Server side methods
+  virtual uint32_t AddDataChangeCallback(const NodeId & node, AttributeId attribute, std::function<DataChangeCallback> callback) = 0;
+  virtual void DeleteDataChangeCallback(uint32_t clienthandle) = 0;
+  virtual StatusCode SetValueCallback(const NodeId & node, AttributeId attribute, std::function<DataValue(void)> callback) = 0;
+  virtual void SetMethod(const NodeId & node, std::function<std::vector<OpcUa::Variant> (NodeId context, std::vector<OpcUa::Variant> arguments)> callback) = 0;
+  //FIXME : SHould we also expose SetValue and GetValue on server side? then we need to lock them ...
+};
 
-  } // namespace UaServer
+AddressSpace::UniquePtr CreateAddressSpace(const Common::Logger::SharedPtr & logger);
+
+} // namespace UaServer
 } // nmespace OpcUa

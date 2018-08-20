@@ -34,9 +34,11 @@ class AddressSpace : public Test
 protected:
   virtual void SetUp()
   {
-    const bool debug = false;
-    NameSpace = OpcUa::Server::CreateAddressSpace(debug);
-    OpcUa::Server::FillStandardNamespace(*NameSpace, debug);
+    spdlog::drop_all();
+    Logger = spdlog::stderr_color_mt("test");
+    Logger->set_level(spdlog::level::info);
+    NameSpace = OpcUa::Server::CreateAddressSpace(Logger);
+    OpcUa::Server::FillStandardNamespace(*NameSpace, Logger);
   }
 
   virtual void TearDown()
@@ -57,6 +59,7 @@ protected:
 
 protected:
   OpcUa::Server::AddressSpace::UniquePtr NameSpace;
+  Common::Logger::SharedPtr Logger;
 };
 
 TEST_F(AddressSpace, GeneratesNodeIdIfPassNull)
@@ -66,7 +69,7 @@ TEST_F(AddressSpace, GeneratesNodeIdIfPassNull)
   newNode.Attributes = OpcUa::ObjectAttributes();
   std::vector<OpcUa::AddNodesResult> results = NameSpace->AddNodes({newNode});
   ASSERT_EQ(results.size(), 1);
-  const OpcUa::AddNodesResult& result = results[0];
+  const OpcUa::AddNodesResult & result = results[0];
   EXPECT_EQ(result.Status, OpcUa::StatusCode::Good);
   EXPECT_NE(result.AddedNodeId, OpcUa::NodeId(OpcUa::ObjectId::Null));
 }
@@ -79,7 +82,7 @@ TEST_F(AddressSpace, GeneratesIfNodeIdDuplicated)
   newNode.Attributes = OpcUa::ObjectAttributes();
   std::vector<OpcUa::AddNodesResult> results = NameSpace->AddNodes({newNode});
   ASSERT_EQ(results.size(), 1);
-  const OpcUa::AddNodesResult& result = results[0];
+  const OpcUa::AddNodesResult & result = results[0];
   EXPECT_EQ(result.Status, OpcUa::StatusCode::BadNodeIdExists);
   EXPECT_EQ(result.AddedNodeId, OpcUa::ObjectId::Null);
 }
@@ -91,7 +94,7 @@ TEST_F(AddressSpace, ReadAttributes)
   readParams.AttributesToRead.push_back(value);
   std::vector<OpcUa::DataValue> results = NameSpace->Read(readParams);
   ASSERT_EQ(results.size(), 1);
-  const OpcUa::DataValue& result = results[0];
+  const OpcUa::DataValue & result = results[0];
   ASSERT_NE(result.Encoding | OpcUa::DATA_VALUE, 0);
   EXPECT_EQ(result.Value, OpcUa::QualifiedName(OpcUa::Names::Root));
 }
@@ -103,7 +106,8 @@ TEST_F(AddressSpace, CallsDataChangeCallbackOnWrite)
   OpcUa::AttributeId callbackAttr;
   OpcUa::DataValue callbackValue;
   bool callbackCalled = false;
-  unsigned callbackHandle = NameSpace->AddDataChangeCallback(valueId, OpcUa::AttributeId::Value, [&](const OpcUa::NodeId& id, OpcUa::AttributeId attr, const OpcUa::DataValue& value){
+  unsigned callbackHandle = NameSpace->AddDataChangeCallback(valueId, OpcUa::AttributeId::Value, [&](const OpcUa::NodeId & id, OpcUa::AttributeId attr, const OpcUa::DataValue & value)
+  {
     callbackId = id;
     callbackAttr = attr;
     callbackValue = value;
@@ -134,7 +138,8 @@ TEST_F(AddressSpace, CallsDataChangeCallbackOnWrite)
 TEST_F(AddressSpace, ValueCallbackIsCalled)
 {
   OpcUa::NodeId valueId = CreateValue();
-  OpcUa::StatusCode code = NameSpace->SetValueCallback(valueId, OpcUa::AttributeId::Value, [](){
+  OpcUa::StatusCode code = NameSpace->SetValueCallback(valueId, OpcUa::AttributeId::Value, []()
+  {
     return OpcUa::DataValue(10);
   });
 

@@ -9,6 +9,9 @@ project(freeopcua)
 
 option(BUILD_CLIENT "Build Client" ON)
 option(BUILD_SERVER "Build Server" ON)
+
+option(SSL_SUPPORT_MBEDTLS "Support rsa-oaep password encryption using mbedtls library " ON)
+
 option(BUILD_PYTHON "Build Python bindings" ON)
 option(BUILD_TESTING "Build and run tests" OFF)
 OPTION(BUILD_SHARED_LIBS "Build shared libraries." ON)
@@ -65,13 +68,13 @@ if(MSVC)
     add_definitions(/D_SCL_SECURE_NO_WARNINGS /D_CRT_SECURE_NO_WARNINGS /D_WIN32 /D_WINDOWS /FS /D_WIN32_WINNT=0x0600)
     add_compile_options(/Zi /Od /EHsc /W4)
 else(MSVC)
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -ggdb -o0")
+    set(CMAKE_CXX_FLAGS_DEBUG " -Wall -ggdb -o0 ${CMAKE_CXX_FLAGS_DEBUG}")
 
     SET(STATIC_LIBRARY_CXX_FLAGS)
     SET(EXECUTABLE_CXX_FLAGS)
     SET(DYNAMIC_LIBRARY_CXX_FLAGS)
     SET(D -D)
-    set(CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS} -std=c++11 -Wall -fPIC ")
+    set(CMAKE_CXX_FLAGS " -std=c++11 -Wall -fPIC ${CMAKE_CXX_FLAGS} ")
     SET (CMAKE_SHARED_LINKER_FLAGS ${CMAKE_SHARED_LINKER_FLAGS_INIT} $ENV{LDFLAGS})
     #set(CMAKE_SHARED_LINKER_FLAGS "--no-undefined" )
 endif()
@@ -97,12 +100,8 @@ else(WIN32)
     SET(OS_SUFFIX _lin)
 
 
-    find_package(LibXml2 REQUIRED)
-    message(STATUS "LibXML2 INCLUDE DIR IS: " ${LIBXML2_INCLUDE_DIR})
-    include_directories( ${LIBXML2_INCLUDE_DIR} )
-
     #FIXME: remove that variable and link directly when necessary!!!!
-    SET(ADDITIONAL_LINK_LIBRARIES pthread dl ${LIBXML2_LIBRARIES})
+    SET(ADDITIONAL_LINK_LIBRARIES pthread dl)
 
 endif(WIN32)
 
@@ -111,6 +110,21 @@ include_directories( ${Boost_INCLUDE_DIRS} )
 link_directories( ${Boost_LIBRARY_DIRS} )
 message(STATUS "Boost INCLUDE DIR IS: " ${Boost_INCLUDE_DIRS})
 message(STATUS "Boost LIBRARY DIR IS: " ${Boost_LIBRARY_DIRS})
+
+message(STATUS "SSL support using libmbedtls: " ${SSL_SUPPORT_MBEDTLS})
+if (SSL_SUPPORT_MBEDTLS)
+    add_definitions(-DSSL_SUPPORT_MBEDTLS)
+    IF (DEFINED SSL_SUPPORT_MBEDTLS_INCLUDE_DIR)
+        message(STATUS "  mbedtls library INCLUDE_DIR: " ${SSL_SUPPORT_MBEDTLS_INCLUDE_DIR})
+        include_directories( ${SSL_SUPPORT_MBEDTLS_INCLUDE_DIR} )
+    ENDIF ()
+    IF (DEFINED SSL_SUPPORT_MBEDTLS_LIB_DIR)
+        message(STATUS "  mbedtls library LIB_DIR: " ${SSL_SUPPORT_MBEDTLS_LIB_DIR})
+        link_directories( ${SSL_SUPPORT_MBEDTLS_LIB_DIR} )
+    ENDIF ()
+    SET(SSL_SUPPORT_LINK_LIBRARIES mbedx509 mbedtls mbedcrypto)
+    message(STATUS "  mbedtls LIBRARIES: " ${SSL_SUPPORT_LINK_LIBRARIES})
+endif (SSL_SUPPORT_MBEDTLS)
 
 SET(TEST_INCLUDES, "")
 IF(BUILD_TESTING)
@@ -165,11 +179,15 @@ add_library(opcuaprotocol
     src/protocol/session.cpp
     src/protocol/status_codes.cpp
     src/protocol/string_utils.cpp
+    src/protocol/string_utils_attributeid_tostring.cpp
+    src/protocol/string_utils_objectid_tostring.cpp
     src/protocol/string_utils_statuscode_tostring.cpp
     src/protocol/subscriptions.cpp
 )
 
-target_compile_options(opcuaprotocol PUBLIC ${STATIC_LIBRARY_CXX_FLAGS})
+if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
+    target_compile_options(opcuaprotocol PUBLIC ${STATIC_LIBRARY_CXX_FLAGS})
+endif ()
 target_link_libraries(opcuaprotocol ${ADDITIONAL_LINK_LIBRARIES})
 target_include_directories(opcuaprotocol PUBLIC $<INSTALL_INTERFACE:include>)
 install(TARGETS opcuaprotocol EXPORT FreeOpcUa
@@ -209,7 +227,9 @@ if (BUILD_TESTING)
         gtest_main
     )
 
-    target_compile_options(test_opcuaprotocol PUBLIC ${EXECUTABLE_CXX_FLAGS})
+    if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
+        target_compile_options(test_opcuaprotocol PUBLIC ${EXECUTABLE_CXX_FLAGS})
+    endif ()
 
     add_test(NAME opcuaprotocol COMMAND test_opcuaprotocol)
 endif()
@@ -246,7 +266,10 @@ SET(opcuacore_SOURCES
 
 add_library(opcuacore ${opcuacore_SOURCES})
 
-target_compile_options(opcuacore PUBLIC ${STATIC_LIBRARY_CXX_FLAGS})
+if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
+    target_compile_options(opcuacore PUBLIC ${STATIC_LIBRARY_CXX_FLAGS})
+endif ()
+
 target_link_libraries(opcuacore ${ADDITIONAL_LINK_LIBRARIES} opcuaprotocol ${Boost_SYSTEM_LIBRARY} ${Boost_FILESYSTEM_LIBRARY})
 target_include_directories(opcuacore PUBLIC $<INSTALL_INTERFACE:include>)
 install(TARGETS opcuacore EXPORT FreeOpcUa
@@ -282,7 +305,9 @@ if (BUILD_TESTING)
         ${TEST_LIBS}
     )
 
-    target_compile_options(test_opcuacore PUBLIC ${D}DYNAMIC_ADDON_PATH="${DYNAMIC_ADDON_PATH}" ${D}TEST_CORE_CONFIG_PATH="${TEST_CORE_CONFIG_PATH}" ${EXECUTABLE_CXX_FLAGS})
+    if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
+        target_compile_options(test_opcuacore PUBLIC ${D}DYNAMIC_ADDON_PATH="${DYNAMIC_ADDON_PATH}" ${D}TEST_CORE_CONFIG_PATH="${TEST_CORE_CONFIG_PATH}" ${EXECUTABLE_CXX_FLAGS})
+    endif ()
 
     add_test(NAME opcuacore COMMAND test_opcuacore)
 
@@ -294,6 +319,7 @@ endif(BUILD_TESTING)
 # client library
 ############################################################################
 if (BUILD_CLIENT)
+
     add_library(opcuaclient
     src/client/binary_connection.cpp
     src/client/binary_client.cpp
@@ -301,12 +327,15 @@ if (BUILD_CLIENT)
     src/client/client.cpp
     )
 
-    target_compile_options(opcuaclient PUBLIC ${STATIC_LIBRARY_CXX_FLAGS})
+    if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
+        target_compile_options(opcuaclient PUBLIC ${STATIC_LIBRARY_CXX_FLAGS})
+    endif ()
     target_link_libraries(opcuaclient
         opcuacore
         ${ADDITIONAL_LINK_LIBRARIES}
         ${Boost_PROGRAMOPTIONS_LIBRARY}
         )
+
     target_include_directories(opcuaclient PUBLIC $<INSTALL_INTERFACE:include>)
     install(TARGETS opcuaclient EXPORT FreeOpcUa
                                 LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -342,7 +371,9 @@ if (BUILD_CLIENT)
         opcuacore
     )
 
-    target_compile_options(opcuaclient PUBLIC ${EXECUTABLE_CXX_FLAGS})
+    if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
+        target_compile_options(opcuaclient PUBLIC ${EXECUTABLE_CXX_FLAGS})
+    endif ()
 endif(BUILD_CLIENT)
 
 
@@ -373,6 +404,7 @@ if(BUILD_SERVER)
         src/server/opc_tcp_async_addon.cpp
         src/server/opc_tcp_async_parameters.cpp
         src/server/opc_tcp_processor.cpp
+        src/server/tcp_server.cpp
         src/server/server_object.cpp
         src/server/server_object_addon.cpp
         src/server/services_registry_factory.cpp
@@ -391,7 +423,9 @@ if(BUILD_SERVER)
         src/server/subscription_service_internal.cpp
         )
 
-    target_compile_options(opcuaserver PUBLIC ${STATIC_LIBRARY_CXX_FLAGS})
+    if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
+        target_compile_options(opcuaserver PUBLIC ${STATIC_LIBRARY_CXX_FLAGS})
+    endif ()
     target_link_libraries(opcuaserver ${ADDITIONAL_LINK_LIBRARIES} opcuacore opcuaprotocol ${Boost_SYSTEM_LIBRARY})
     target_include_directories(opcuaserver PUBLIC $<INSTALL_INTERFACE:include>)
     install(TARGETS opcuaserver EXPORT FreeOpcUa
@@ -446,7 +480,9 @@ if(BUILD_SERVER)
             )
 
         target_include_directories(test_opcuaserver PUBLIC .)
-        target_compile_options(test_opcuaserver PUBLIC ${D}TEST_CORE_CONFIG_PATH="${TEST_CORE_CONFIG_PATH}" ${STATIC_LIBRARY_CXX_FLAGS})
+        if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
+            target_compile_options(test_opcuaserver PUBLIC ${D}TEST_CORE_CONFIG_PATH="${TEST_CORE_CONFIG_PATH}" ${STATIC_LIBRARY_CXX_FLAGS})
+        endif ()
 
         add_test(NAME opcuaserverapp COMMAND test_opcuaserver)
 
@@ -474,7 +510,9 @@ if(BUILD_SERVER)
         opcuaserver
         ${Boost_PROGRAM_OPTIONS_LIBRARY}
         )
-    target_compile_options(opcuaserverapp PUBLIC ${EXECUTABLE_CXX_FLAGS})
+    if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
+        target_compile_options(opcuaserverapp PUBLIC ${EXECUTABLE_CXX_FLAGS})
+    endif ()
 
 endif(BUILD_SERVER)
 
@@ -492,9 +530,12 @@ if (BUILD_CLIENT)
         opcuaprotocol
         opcuacore
         opcuaclient
+        ${SSL_SUPPORT_LINK_LIBRARIES}
     )
 
-    target_compile_options(example_client PUBLIC ${EXECUTABLE_CXX_FLAGS})
+    if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
+        target_compile_options(example_client PUBLIC ${EXECUTABLE_CXX_FLAGS})
+    endif ()
 
 endif (BUILD_CLIENT)
 
@@ -514,7 +555,9 @@ if(BUILD_SERVER)
     opcuaserver
     )
 
-    target_compile_options(example_server PUBLIC ${EXECUTABLE_CXX_FLAGS})
+    if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
+        target_compile_options(example_server PUBLIC ${EXECUTABLE_CXX_FLAGS})
+    endif ()
     if(MSVC)
         set_target_properties(example_server PROPERTIES LINK_FLAGS /STACK:3000000)
     endif(MSVC)

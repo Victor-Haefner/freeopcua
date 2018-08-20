@@ -4,7 +4,7 @@
 /// @license GNU LGPL
 ///
 /// Distributed under the GNU LGPL License
-/// (See accompanying file LICENSE or copy at 
+/// (See accompanying file LICENSE or copy at
 /// http://www.gnu.org/licenses/lgpl.html)
 ///
 
@@ -16,6 +16,16 @@ TEST(Uri, CanParseFullURI)
 {
   Common::Uri uri("http://host:8080");
   ASSERT_EQ(uri.Scheme(), "http");
+  ASSERT_EQ(uri.Host(), "host");
+  ASSERT_EQ(uri.Port(), 8080u);
+}
+
+TEST(Uri, CanParseFullURIWithUserAndPassword)
+{
+  Common::Uri uri("http://user:password@host:8080");
+  ASSERT_EQ(uri.Scheme(), "http");
+  ASSERT_EQ(uri.User(), "user");
+  ASSERT_EQ(uri.Password(), "password");
   ASSERT_EQ(uri.Host(), "host");
   ASSERT_EQ(uri.Port(), 8080u);
 }

@@ -42,8 +42,10 @@ class ModelObjectType : public Test
 protected:
   virtual void SetUp()
   {
-    const bool debug = false;
-    Addons = Common::CreateAddonsManager();
+    spdlog::drop_all();
+    Logger = spdlog::stderr_color_mt("test");
+    Logger->set_level(spdlog::level::info);
+    Addons = Common::CreateAddonsManager(Logger);
 
     OpcUa::Test::RegisterServicesRegistry(*Addons);
     OpcUa::Test::RegisterAddressSpace(*Addons);
@@ -81,7 +83,7 @@ protected:
 
   OpcUa::NodeId CreateObjectTypeWithOneVariable()
   {
-    const OpcUa::NodeId& objectId = CreateEmptyObjectType();
+    const OpcUa::NodeId & objectId = CreateEmptyObjectType();
     OpcUa::AddNodesItem variable;
     variable.BrowseName = OpcUa::QualifiedName("new_variable1");
     variable.Class = OpcUa::NodeClass::Variable;
@@ -96,7 +98,7 @@ protected:
 
   OpcUa::NodeId CreateObjectTypeWithOneUntypedObject()
   {
-    const OpcUa::NodeId& objectId = CreateEmptyObjectType();
+    const OpcUa::NodeId & objectId = CreateEmptyObjectType();
     OpcUa::AddNodesItem object;
     object.BrowseName = OpcUa::QualifiedName("new_sub_object1");
     object.Class = OpcUa::NodeClass::Object;
@@ -111,8 +113,8 @@ protected:
 
   OpcUa::NodeId CreateObjectTypeWithOneTypedObject()
   {
-    const OpcUa::NodeId& resultTypeId = CreateEmptyObjectType();
-    const OpcUa::NodeId& objectTypeWithVar = CreateObjectTypeWithOneVariable();
+    const OpcUa::NodeId & resultTypeId = CreateEmptyObjectType();
+    const OpcUa::NodeId & objectTypeWithVar = CreateObjectTypeWithOneVariable();
     OpcUa::AddNodesItem object;
     object.BrowseName = OpcUa::QualifiedName("new_sub_object1");
     object.Class = OpcUa::NodeClass::Object;
@@ -127,6 +129,7 @@ protected:
   }
 
 protected:
+  Common::Logger::SharedPtr Logger;
   Common::AddonsManager::UniquePtr Addons;
   OpcUa::Services::SharedPtr Services;
 };

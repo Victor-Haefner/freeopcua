@@ -16,19 +16,20 @@
 #include <opc/ua/protocol/protocol.h>
 
 #include <vector>
+#include <functional>
 
 namespace OpcUa
 {
 
-  class MethodServices : private Common::Interface
-  {
-  public:
-    DEFINE_CLASS_POINTERS(MethodServices)
+class MethodServices : private Common::Interface
+{
+public:
+  DEFINE_CLASS_POINTERS(MethodServices)
 
-  public:
-    virtual std::vector<CallMethodResult> Call(const std::vector<CallMethodRequest>& methodsToCall) = 0;
-    virtual void SetMethod(const NodeId& node, std::function<std::vector<OpcUa::Variant> (NodeId context, std::vector<OpcUa::Variant> arguments)> callback) = 0;
-  };
+public:
+  virtual std::vector<CallMethodResult> Call(const std::vector<CallMethodRequest> & methodsToCall) = 0;
+  virtual void SetMethod(const NodeId & node, std::function<std::vector<OpcUa::Variant> (NodeId context, std::vector<OpcUa::Variant> arguments)> callback) = 0;
+};
 
 } // namespace OpcUa
 

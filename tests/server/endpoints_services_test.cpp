@@ -12,6 +12,7 @@
 #include "services_registry_test.h"
 
 #include <src/server/endpoints_parameters.h>
+#include <opc/common/logger.h>
 #include <opc/ua/protocol/session.h>
 #include <opc/ua/server/endpoints_services.h>
 #include <gmock/gmock.h>
@@ -20,12 +21,15 @@
 
 using namespace testing;
 
-class EndpointsRegistry :public Test
+class EndpointsRegistry : public Test
 {
 protected:
   virtual void SetUp()
   {
-    Addons = Common::CreateAddonsManager();
+    spdlog::drop_all();
+    Logger = spdlog::stderr_color_mt("test");
+    Logger->set_level(spdlog::level::info);
+    Addons = Common::CreateAddonsManager(Logger);
     OpcUa::Test::RegisterServicesRegistry(*Addons);
     OpcUa::Test::RegisterEndpointsServicesAddon(*Addons);
     Addons->Start();
@@ -38,6 +42,7 @@ protected:
   }
 
 protected:
+  Common::Logger::SharedPtr Logger;
   std::unique_ptr<Common::AddonsManager> Addons;
 };
 
@@ -93,7 +98,7 @@ std::vector<Common::ParametersGroup> CreateTwoEndpointsParameters()
   endpoint.Groups.push_back(tokenPolicy);
   data.Groups.push_back(endpoint);
 
-  return std::vector<Common::ParametersGroup>{data, data};
+  return std::vector<Common::ParametersGroup> {data, data};
 }
 
 std::vector<OpcUa::Server::ApplicationData> CreateTwoEndpointsConfiguration()
@@ -123,19 +128,21 @@ std::vector<OpcUa::Server::ApplicationData> CreateTwoEndpointsConfiguration()
 
   data.Endpoints = {ed};
 
-  return std::vector<OpcUa::Server::ApplicationData>{data, data};
+  return std::vector<OpcUa::Server::ApplicationData> {data, data};
 }
 
-Common::Parameter FindParameter(const Common::ParametersGroup& group, const char* name)
+Common::Parameter FindParameter(const Common::ParametersGroup & group, const char * name)
 {
-  auto paramIt = std::find_if(group.Parameters.begin(), group.Parameters.end(), [name](const Common::Parameter& param){
+  auto paramIt = std::find_if(group.Parameters.begin(), group.Parameters.end(), [name](const Common::Parameter & param)
+  {
     return param.Name == name;
   });
 
   if (paramIt != group.Parameters.end())
-  {
-    return *paramIt;
-  }
+    {
+      return *paramIt;
+    }
+
   return Common::Parameter();
 }
 
