@@ -10,18 +10,19 @@
 
 #pragma once
 
+#include <boost/asio.hpp>
 #include <opc/ua/event.h>
 #include <opc/ua/server/address_space.h>
 #include <opc/ua/services/subscriptions.h>
 
 
-namespace boost
+/*namespace boost
 {
 namespace asio
 {
 class io_service;
 }
-}
+}*/
 
 namespace OpcUa
 {

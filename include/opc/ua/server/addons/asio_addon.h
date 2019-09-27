@@ -20,10 +20,11 @@
 #pragma once
 
 
+#include <boost/asio.hpp>
 #include <opc/common/addons_core/addon.h>
 
 
-namespace boost
+/*namespace boost
 {
 namespace asio
 {
@@ -31,7 +32,7 @@ namespace asio
 class io_service;
 
 }
-}
+}*/
 
 namespace OpcUa
 {
