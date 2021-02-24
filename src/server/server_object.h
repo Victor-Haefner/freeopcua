@@ -25,14 +25,6 @@
 
 #include "timer.h"
 
-/*namespace boost
-{
-namespace asio
-{
-class io_service;
-}
-}*/
-
 namespace OpcUa
 {
 namespace Server
@@ -53,7 +45,6 @@ private:
 
 private:
   Services::SharedPtr Server;
-//  boost::asio::io_service & Io;
   bool Debug = false;
   Model::Object Instance;
   Model::Variable ServerTime;

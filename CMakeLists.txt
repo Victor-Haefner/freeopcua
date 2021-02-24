@@ -38,11 +38,13 @@ SET (CMAKE_ARCHIVE_OUTPUT_DIRECTORY
         ""
     )
 
+set(ADDITIONAL_PUBLIC_COMPILE_OPTIONS)
+
 # Helper function to generate a pkg-config file for a single library
 # Takes the filename of the .pc file as a parameter and replaces all
 # placeholders in the .pc.in file with the actual values
 # (does nothing on non-unix systems)
-function(generate_pkgconfig BASENAME)
+function(generate_pkgconfig TARGET_NAME)
     if(UNIX)
         include(FindPkgConfig QUIET)
         if(PKG_CONFIG_FOUND)
@@ -51,10 +53,15 @@ function(generate_pkgconfig BASENAME)
             set(exec_prefix ${CMAKE_INSTALL_PREFIX})
             set(libdir ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR})
             set(includedir ${CMAKE_INSTALL_PREFIX}/include)
+            get_target_property(interface_cflags ${TARGET_NAME} INTERFACE_COMPILE_OPTIONS)
+            if(NOT interface_cflags)
+                # no flags, set to empty
+                set(interface_cflags)
+            endif()
 
             # generate pkg-config file
-            configure_file("${BASENAME}.in" "${BASENAME}" @ONLY)
-            install(FILES       "${CMAKE_CURRENT_BINARY_DIR}/${BASENAME}"
+            configure_file("lib${TARGET_NAME}.pc.in" "lib${TARGET_NAME}.pc" @ONLY)
+            install(FILES       "${CMAKE_CURRENT_BINARY_DIR}/lib${TARGET_NAME}.pc"
                     DESTINATION "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/pkgconfig")
         endif()
     endif()
@@ -68,14 +75,14 @@ if(MSVC)
     add_definitions(/D_SCL_SECURE_NO_WARNINGS /D_CRT_SECURE_NO_WARNINGS /D_WIN32 /D_WINDOWS /FS /D_WIN32_WINNT=0x0600)
     add_compile_options(/Zi /Od /EHsc /W4)
 else(MSVC)
-    set(CMAKE_CXX_FLAGS_DEBUG " -Wall -ggdb -o0 ${CMAKE_CXX_FLAGS_DEBUG}")
+    set(CMAKE_CXX_FLAGS_DEBUG " -Wall -ggdb -O0 ${CMAKE_CXX_FLAGS_DEBUG}")
 
     SET(STATIC_LIBRARY_CXX_FLAGS)
     SET(EXECUTABLE_CXX_FLAGS)
     SET(DYNAMIC_LIBRARY_CXX_FLAGS)
     SET(D -D)
     set(CMAKE_CXX_FLAGS " -std=c++11 -Wall -fPIC ${CMAKE_CXX_FLAGS} ")
-    SET (CMAKE_SHARED_LINKER_FLAGS ${CMAKE_SHARED_LINKER_FLAGS_INIT} $ENV{LDFLAGS})
+    SET (CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS_INIT} $ENV{LDFLAGS}")
     #set(CMAKE_SHARED_LINKER_FLAGS "--no-undefined" )
 endif()
 
@@ -98,12 +105,30 @@ else(WIN32)
     SET(DYNAMIC_ADDON_PATH "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libtest_dynamic_addon.so")
     SET(TEST_CORE_CONFIG_PATH "${PROJECT_SOURCE_DIR}/tests/core/configs/")
     SET(OS_SUFFIX _lin)
+    # gcc less then version 4.9 uses a broken std::regex implementation
+    # use libxml2 to parse URL's instead
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.9.0)
+        find_package(LibXml2 REQUIRED)
+        message(STATUS "LibXML2 INCLUDE DIR IS: " ${LIBXML2_INCLUDE_DIR})
+        include_directories( ${LIBXML2_INCLUDE_DIR} )
+
+        SET(NO_REGEX_SUFFIX _noregex)
+    endif()
 
 
     #FIXME: remove that variable and link directly when necessary!!!!
-    SET(ADDITIONAL_LINK_LIBRARIES pthread dl)
+    SET(ADDITIONAL_LINK_LIBRARIES pthread dl ${LIBXML2_LIBRARIES})
 
 endif(WIN32)
+
+if(UNIX)
+    find_package(spdlog)
+    if(spdlog_FOUND)
+        message(STATUS "Found spdlog")
+        set(ADDITIONAL_PUBLIC_COMPILE_OPTIONS -DHAVE_SYSTEM_SPDLOG)
+        set(ADDITIONAL_LINK_LIBRARIES ${ADDITIONAL_LINK_LIBRARIES} spdlog::spdlog)
+    endif()
+endif()
 
 find_package( Boost COMPONENTS system program_options filesystem thread REQUIRED )
 include_directories( ${Boost_INCLUDE_DIRS} )
@@ -122,7 +147,7 @@ if (SSL_SUPPORT_MBEDTLS)
         message(STATUS "  mbedtls library LIB_DIR: " ${SSL_SUPPORT_MBEDTLS_LIB_DIR})
         link_directories( ${SSL_SUPPORT_MBEDTLS_LIB_DIR} )
     ENDIF ()
-    SET(SSL_SUPPORT_LINK_LIBRARIES mbedx509 mbedtls mbedcrypto)
+    SET(SSL_SUPPORT_LINK_LIBRARIES mbedcrypto mbedx509 mbedtls)
     message(STATUS "  mbedtls LIBRARIES: " ${SSL_SUPPORT_LINK_LIBRARIES})
 endif (SSL_SUPPORT_MBEDTLS)
 
@@ -188,13 +213,14 @@ add_library(opcuaprotocol
 if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
     target_compile_options(opcuaprotocol PUBLIC ${STATIC_LIBRARY_CXX_FLAGS})
 endif ()
+target_compile_options(opcuaprotocol PUBLIC ${ADDITIONAL_PUBLIC_COMPILE_OPTIONS})
 target_link_libraries(opcuaprotocol ${ADDITIONAL_LINK_LIBRARIES})
 target_include_directories(opcuaprotocol PUBLIC $<INSTALL_INTERFACE:include>)
 install(TARGETS opcuaprotocol EXPORT FreeOpcUa
                               LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
                               ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static)
 
-generate_pkgconfig("libopcuaprotocol.pc")
+generate_pkgconfig(opcuaprotocol)
 
 if (NOT WIN32)
     target_link_libraries(opcuaprotocol ${Boost_LIBRARIES})
@@ -248,7 +274,7 @@ SET(opcuacore_SOURCES
     src/core/common/common_errors.cpp
     src/core/common/exception.cpp
     src/core/common/thread.cpp
-    src/core/common/uri_facade${OS_SUFFIX}.cpp
+    src/core/common/uri_facade${OS_SUFFIX}${NO_REGEX_SUFFIX}.cpp
     src/core/common/value.cpp
     src/core/event.cpp
     src/core/model_impl.h
@@ -270,13 +296,14 @@ if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
     target_compile_options(opcuacore PUBLIC ${STATIC_LIBRARY_CXX_FLAGS})
 endif ()
 
+target_compile_options(opcuacore PUBLIC ${ADDITIONAL_PUBLIC_COMPILE_OPTIONS})
 target_link_libraries(opcuacore ${ADDITIONAL_LINK_LIBRARIES} opcuaprotocol ${Boost_SYSTEM_LIBRARY} ${Boost_FILESYSTEM_LIBRARY})
 target_include_directories(opcuacore PUBLIC $<INSTALL_INTERFACE:include>)
 install(TARGETS opcuacore EXPORT FreeOpcUa
                           LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
                           ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static)
 
-generate_pkgconfig("libopcuacore.pc")
+generate_pkgconfig(opcuacore)
 
 if (BUILD_TESTING)
     add_library(test_dynamic_addon MODULE
@@ -298,6 +325,7 @@ if (BUILD_TESTING)
         tests/core/test_uri.cpp
     )
 
+    target_compile_options(test_opcuacore PUBLIC ${ADDITIONAL_PUBLIC_COMPILE_OPTIONS})
     target_link_libraries(test_opcuacore
         ${ADDITIONAL_LINK_LIBRARIES}
         opcuaprotocol
@@ -330,18 +358,20 @@ if (BUILD_CLIENT)
     if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
         target_compile_options(opcuaclient PUBLIC ${STATIC_LIBRARY_CXX_FLAGS})
     endif ()
+    target_compile_options(opcuaclient PUBLIC ${ADDITIONAL_PUBLIC_COMPILE_OPTIONS})
     target_link_libraries(opcuaclient
         opcuacore
         ${ADDITIONAL_LINK_LIBRARIES}
         ${Boost_PROGRAMOPTIONS_LIBRARY}
-        )
+        ${SSL_SUPPORT_LINK_LIBRARIES}
+    )
 
     target_include_directories(opcuaclient PUBLIC $<INSTALL_INTERFACE:include>)
     install(TARGETS opcuaclient EXPORT FreeOpcUa
                                 LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
                                 ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static)
 
-    generate_pkgconfig("libopcuaclient.pc")
+    generate_pkgconfig(opcuaclient)
 
     #tests/client/binary_handshake.cpp
     #tests/client/common.h
@@ -364,6 +394,7 @@ if (BUILD_CLIENT)
     )
 
 
+    target_compile_options(opcuaclientapp PUBLIC ${ADDITIONAL_PUBLIC_COMPILE_OPTIONS})
     target_link_libraries(opcuaclientapp
         ${ADDITIONAL_LINK_LIBRARIES}
         ${Boost_PROGRAM_OPTIONS_LIBRARY}
@@ -426,13 +457,14 @@ if(BUILD_SERVER)
     if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
         target_compile_options(opcuaserver PUBLIC ${STATIC_LIBRARY_CXX_FLAGS})
     endif ()
+    target_compile_options(opcuaserver PUBLIC ${ADDITIONAL_PUBLIC_COMPILE_OPTIONS})
     target_link_libraries(opcuaserver ${ADDITIONAL_LINK_LIBRARIES} opcuacore opcuaprotocol ${Boost_SYSTEM_LIBRARY})
     target_include_directories(opcuaserver PUBLIC $<INSTALL_INTERFACE:include>)
     install(TARGETS opcuaserver EXPORT FreeOpcUa
                                 LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
                                 ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static)
 
-    generate_pkgconfig("libopcuaserver.pc")
+    generate_pkgconfig(opcuaserver)
 
     #  src/server/xml_address_space_addon.cpp
     #  src/server/xml_address_space_loader.cpp
@@ -470,6 +502,7 @@ if(BUILD_SERVER)
         #  tests/server/xml_addressspace_ut.cpp
         #  tests/server/xml_address_space_addon_ut.cpp
 
+        target_compile_options(test_opcuaserver PUBLIC ${ADDITIONAL_PUBLIC_COMPILE_OPTIONS})
         target_link_libraries(test_opcuaserver
             ${ADDITIONAL_LINK_LIBRARIES}
             opcuaclient
@@ -503,12 +536,14 @@ if(BUILD_SERVER)
     )
 
     add_executable(opcuaserverapp ${OPCUASERVERAPP_SOURCES})
+    target_compile_options(opcuaserverapp PUBLIC ${ADDITIONAL_PUBLIC_COMPILE_OPTIONS})
     target_link_libraries(opcuaserverapp
         ${ADDITIONAL_LINK_LIBRARIES}
         opcuaprotocol
         opcuacore
         opcuaserver
         ${Boost_PROGRAM_OPTIONS_LIBRARY}
+        ${SSL_SUPPORT_LINK_LIBRARIES}
         )
     if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
         target_compile_options(opcuaserverapp PUBLIC ${EXECUTABLE_CXX_FLAGS})
@@ -525,6 +560,7 @@ if (BUILD_CLIENT)
     src/examples/example_client.cpp
     )
 
+    target_compile_options(example_client PUBLIC ${ADDITIONAL_PUBLIC_COMPILE_OPTIONS})
     target_link_libraries(example_client
         ${ADDITIONAL_LINK_LIBRARIES}
         opcuaprotocol
@@ -548,11 +584,13 @@ if(BUILD_SERVER)
     src/examples/example_server.cpp
     )
 
+    target_compile_options(example_server PUBLIC ${ADDITIONAL_PUBLIC_COMPILE_OPTIONS})
     target_link_libraries(example_server
-    ${ADDITIONAL_LINK_LIBRARIES}
-    opcuaprotocol
-    opcuacore
-    opcuaserver
+        ${ADDITIONAL_LINK_LIBRARIES}
+        opcuaprotocol
+        opcuacore
+        opcuaserver
+        ${SSL_SUPPORT_LINK_LIBRARIES}
     )
 
     if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
@@ -572,7 +610,7 @@ if (BUILD_PYTHON)
     add_subdirectory(python)
 endif (BUILD_PYTHON)
 
-install(EXPORT FreeOpcUa DESTINATION lib/cmake/FreeOpcUa FILE FreeOpcUaConfig.cmake)
+install(EXPORT FreeOpcUa DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/FreeOpcUa FILE FreeOpcUaConfig.cmake)
 
 SET(CPACK_GENERATOR "DEB")
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "FreeOpcUa")

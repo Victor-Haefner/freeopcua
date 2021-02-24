@@ -23,13 +23,6 @@
 #include <opc/ua/services/services.h>
 #include <opc/common/interface.h>
 
-/*namespace boost
-{
-namespace asio
-{
-class io_service;
-}
-}*/
 
 namespace OpcUa
 {
