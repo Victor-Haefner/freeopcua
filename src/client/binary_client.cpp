@@ -98,7 +98,10 @@ public:
   T WaitForData(std::chrono::milliseconds msec)
   {
     if (doneEvent.wait_for(lock, msec) == std::cv_status::timeout)
-      { throw std::runtime_error("Response timed out"); }
+      {
+        LOG_WARN(Logger, "binary_client         | Response timed out");
+        return T();
+      } //{ throw std::runtime_error("Response timed out"); }
 
     T result;
     result.Header = std::move(this->header);
@@ -232,7 +235,8 @@ public:
       {
         CallbackService.Stop();
         callback_thread.join();
-        throw;
+        LOG_ERROR(Logger, "binary_client         | ReceiveThread: error in HelloServer");
+        //throw;
       }
 
     ReceiveThread = std::thread([this]()
@@ -896,7 +900,8 @@ private:
         std::unique_lock<std::mutex> lock(Mutex);
         Callbacks.erase(request.Header.RequestHandle);
         lock.unlock();
-        throw;
+        LOG_WARN(Logger, "binary_client         | send: id: {} handle: {}, UtcTime: {}, failed with: {}", ToString(request.TypeId, true), request.Header.RequestHandle, request.Header.UtcTime, ex.what());
+        //throw;
       }
 
     return res;
@@ -947,7 +952,8 @@ private:
         Stream >> msg;
         std::stringstream stream;
         stream << "Received error message from server: " << ToString(error) << ", " << msg ;
-        throw std::runtime_error(stream.str());
+        //throw std::runtime_error(stream.str());
+        LOG_WARN(Logger, "binary_client         | error: {}", stream.str());
       }
 
     else //(responseHeader.Type == MessageType::MT_SECURE_MESSAGE )
@@ -967,7 +973,8 @@ private:
       {
         std::stringstream stream;
         stream << "Size of received message " << responseHeader.Size << " bytes is invalid. Expected size " << expectedHeaderSize << " bytes";
-        throw std::runtime_error(stream.str());
+        //throw std::runtime_error(stream.str());
+        LOG_WARN(Logger, "binary_client         | error: {}", stream.str());
       }
 
     std::size_t dataSize = responseHeader.Size - expectedHeaderSize;
