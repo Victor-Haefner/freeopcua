@@ -50,7 +50,7 @@ AddressSpaceInMemory::~AddressSpaceInMemory()
 
 std::vector<AddNodesResult> AddressSpaceInMemory::AddNodes(const std::vector<AddNodesItem> & items)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   std::vector<AddNodesResult> results;
 
@@ -64,7 +64,7 @@ std::vector<AddNodesResult> AddressSpaceInMemory::AddNodes(const std::vector<Add
 
 std::vector<StatusCode> AddressSpaceInMemory::AddReferences(const std::vector<AddReferencesItem> & items)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   std::vector<StatusCode> results;
 
@@ -78,7 +78,7 @@ std::vector<StatusCode> AddressSpaceInMemory::AddReferences(const std::vector<Ad
 
 std::vector<BrowsePathResult> AddressSpaceInMemory::TranslateBrowsePathsToNodeIds(const TranslateBrowsePathsParameters & params) const
 {
-  boost::shared_lock<boost::shared_mutex> lock(DbMutex);
+  std::shared_lock<std::shared_mutex> lock(DbMutex);
 
   std::vector<BrowsePathResult> results;
 
@@ -93,7 +93,7 @@ std::vector<BrowsePathResult> AddressSpaceInMemory::TranslateBrowsePathsToNodeId
 
 std::vector<BrowseResult> AddressSpaceInMemory::Browse(const OpcUa::NodesQuery & query) const
 {
-  boost::shared_lock<boost::shared_mutex> lock(DbMutex);
+  std::shared_lock<std::shared_mutex> lock(DbMutex);
 
   LOG_TRACE(Logger, "address_space_internal| browse");
 
@@ -133,28 +133,28 @@ std::vector<BrowseResult> AddressSpaceInMemory::Browse(const OpcUa::NodesQuery &
 
 std::vector<BrowseResult> AddressSpaceInMemory::BrowseNext() const
 {
-  boost::shared_lock<boost::shared_mutex> lock(DbMutex);
+  std::shared_lock<std::shared_mutex> lock(DbMutex);
 
   return std::vector<BrowseResult>();
 }
 
 std::vector<NodeId> AddressSpaceInMemory::RegisterNodes(const std::vector<NodeId> & params) const
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   return params;
 }
 
 void AddressSpaceInMemory::UnregisterNodes(const std::vector<NodeId> & params) const
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   return;
 }
 
 std::vector<DataValue> AddressSpaceInMemory::Read(const ReadParameters & params) const
 {
-  boost::shared_lock<boost::shared_mutex> lock(DbMutex);
+  std::shared_lock<std::shared_mutex> lock(DbMutex);
 
   std::vector<DataValue> values;
 
@@ -168,7 +168,7 @@ std::vector<DataValue> AddressSpaceInMemory::Read(const ReadParameters & params)
 
 std::vector<StatusCode> AddressSpaceInMemory::Write(const std::vector<OpcUa::WriteValue> & values)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   std::vector<StatusCode> statuses;
 
@@ -274,7 +274,7 @@ DataValue AddressSpaceInMemory::GetValue(const NodeId & node, AttributeId attrib
 
 uint32_t AddressSpaceInMemory::AddDataChangeCallback(const NodeId & node, AttributeId attribute, std::function<Server::DataChangeCallback> callback)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   LOG_DEBUG(Logger, "address_space_internal| set data changes callback for node {} and attribute {}", node, (unsigned)attribute);
 
@@ -304,7 +304,7 @@ uint32_t AddressSpaceInMemory::AddDataChangeCallback(const NodeId & node, Attrib
 
 void AddressSpaceInMemory::DeleteDataChangeCallback(uint32_t serverhandle)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   LOG_DEBUG(Logger, "address_space_internal| deleting callback with client id: {}", serverhandle);
 
@@ -338,7 +338,7 @@ void AddressSpaceInMemory::DeleteDataChangeCallback(uint32_t serverhandle)
 
 StatusCode AddressSpaceInMemory::SetValueCallback(const NodeId & node, AttributeId attribute, std::function<DataValue(void)> callback)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   NodesMap::iterator it = Nodes.find(node);
 
@@ -358,7 +358,7 @@ StatusCode AddressSpaceInMemory::SetValueCallback(const NodeId & node, Attribute
 
 void AddressSpaceInMemory::SetMethod(const NodeId & node, std::function<std::vector<OpcUa::Variant> (NodeId context, std::vector<OpcUa::Variant> arguments)> callback)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   NodesMap::iterator it = Nodes.find(node);
 
@@ -375,7 +375,7 @@ void AddressSpaceInMemory::SetMethod(const NodeId & node, std::function<std::vec
 
 std::vector<OpcUa::CallMethodResult> AddressSpaceInMemory::Call(const std::vector<OpcUa::CallMethodRequest> & methodsToCall)
 {
-  boost::shared_lock<boost::shared_mutex> lock(DbMutex);
+  std::shared_lock<std::shared_mutex> lock(DbMutex);
 
   std::vector<OpcUa::CallMethodResult>  results;
 

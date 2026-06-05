@@ -19,7 +19,7 @@
 
 #pragma once
 
-#include <boost/asio.hpp>
+#include "asio.hpp"
 #include <opc/ua/services/services.h>
 #include <opc/common/interface.h>
 
@@ -47,7 +47,7 @@ public:
   virtual void Shutdown() = 0;
 };
 
-AsyncOpcTcp::UniquePtr CreateAsyncOpcTcp(const AsyncOpcTcp::Parameters & params, Services::SharedPtr server, boost::asio::io_service & io, const Common::Logger::SharedPtr & logger);
+AsyncOpcTcp::UniquePtr CreateAsyncOpcTcp(const AsyncOpcTcp::Parameters & params, Services::SharedPtr server, asio::io_context & io, const Common::Logger::SharedPtr & logger);
 
 }
 }

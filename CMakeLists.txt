@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.5)
 
 #It seems Cmake does not set default bild type so we force it
 if( NOT CMAKE_BUILD_TYPE )
@@ -81,7 +81,7 @@ else(MSVC)
     SET(EXECUTABLE_CXX_FLAGS)
     SET(DYNAMIC_LIBRARY_CXX_FLAGS)
     SET(D -D)
-    set(CMAKE_CXX_FLAGS " -std=c++11 -Wall -fPIC ${CMAKE_CXX_FLAGS} ")
+    set(CMAKE_CXX_FLAGS " -std=c++17 -Wall -fPIC ${CMAKE_CXX_FLAGS} ")
     SET (CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS_INIT} $ENV{LDFLAGS}")
     #set(CMAKE_SHARED_LINKER_FLAGS "--no-undefined" )
 endif()
@@ -129,12 +129,6 @@ if(UNIX)
         set(ADDITIONAL_LINK_LIBRARIES ${ADDITIONAL_LINK_LIBRARIES} spdlog::spdlog)
     endif()
 endif()
-
-find_package( Boost COMPONENTS system program_options filesystem thread REQUIRED )
-include_directories( ${Boost_INCLUDE_DIRS} )
-link_directories( ${Boost_LIBRARY_DIRS} )
-message(STATUS "Boost INCLUDE DIR IS: " ${Boost_INCLUDE_DIRS})
-message(STATUS "Boost LIBRARY DIR IS: " ${Boost_LIBRARY_DIRS})
 
 message(STATUS "SSL support using libmbedtls: " ${SSL_SUPPORT_MBEDTLS})
 if (SSL_SUPPORT_MBEDTLS)
@@ -222,10 +216,6 @@ install(TARGETS opcuaprotocol EXPORT FreeOpcUa
 
 generate_pkgconfig(opcuaprotocol)
 
-if (NOT WIN32)
-    target_link_libraries(opcuaprotocol ${Boost_LIBRARIES})
-endif ()
-
 if (BUILD_TESTING)
     add_executable(test_opcuaprotocol
         tests/protocol/binary_deserialize.cpp
@@ -297,8 +287,9 @@ if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
 endif ()
 
 target_compile_options(opcuacore PUBLIC ${ADDITIONAL_PUBLIC_COMPILE_OPTIONS})
-target_link_libraries(opcuacore ${ADDITIONAL_LINK_LIBRARIES} opcuaprotocol ${Boost_SYSTEM_LIBRARY} ${Boost_FILESYSTEM_LIBRARY})
+target_link_libraries(opcuacore ${ADDITIONAL_LINK_LIBRARIES} opcuaprotocol)
 target_include_directories(opcuacore PUBLIC $<INSTALL_INTERFACE:include>)
+target_include_directories(opcuacore PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/asio/include)
 install(TARGETS opcuacore EXPORT FreeOpcUa
                           LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
                           ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static)
@@ -362,7 +353,6 @@ if (BUILD_CLIENT)
     target_link_libraries(opcuaclient
         opcuacore
         ${ADDITIONAL_LINK_LIBRARIES}
-        ${Boost_PROGRAMOPTIONS_LIBRARY}
         ${SSL_SUPPORT_LINK_LIBRARIES}
     )
 
@@ -397,7 +387,6 @@ if (BUILD_CLIENT)
     target_compile_options(opcuaclientapp PUBLIC ${ADDITIONAL_PUBLIC_COMPILE_OPTIONS})
     target_link_libraries(opcuaclientapp
         ${ADDITIONAL_LINK_LIBRARIES}
-        ${Boost_PROGRAM_OPTIONS_LIBRARY}
         opcuaprotocol
         opcuacore
     )
@@ -422,6 +411,7 @@ if(BUILD_SERVER)
     #ENDFOREACH(PART)
 
     add_library(opcuaserver
+        src/asio/src/asio.cpp
         src/server/address_space_addon.cpp
         src/server/address_space_internal.cpp
         src/server/asio_addon.cpp
@@ -458,8 +448,13 @@ if(BUILD_SERVER)
         target_compile_options(opcuaserver PUBLIC ${STATIC_LIBRARY_CXX_FLAGS})
     endif ()
     target_compile_options(opcuaserver PUBLIC ${ADDITIONAL_PUBLIC_COMPILE_OPTIONS})
-    target_link_libraries(opcuaserver ${ADDITIONAL_LINK_LIBRARIES} opcuacore opcuaprotocol ${Boost_SYSTEM_LIBRARY})
-    target_include_directories(opcuaserver PUBLIC $<INSTALL_INTERFACE:include>)
+    target_link_libraries(opcuaserver ${ADDITIONAL_LINK_LIBRARIES} opcuacore opcuaprotocol)
+    target_include_directories(opcuaserver PUBLIC
+    		$<INSTALL_INTERFACE:include>
+    	)
+    target_include_directories(opcuaserver PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src/asio/include
+	)
     install(TARGETS opcuaserver EXPORT FreeOpcUa
                                 LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
                                 ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static)
@@ -542,7 +537,6 @@ if(BUILD_SERVER)
         opcuaprotocol
         opcuacore
         opcuaserver
-        ${Boost_PROGRAM_OPTIONS_LIBRARY}
         ${SSL_SUPPORT_LINK_LIBRARIES}
         )
     if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)

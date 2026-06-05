@@ -1,6 +1,8 @@
 #include "internal_subscription.h"
 
-#include <boost/thread/locks.hpp>
+#include <mutex>
+#include <shared_mutex>
+#include <chrono>
 
 namespace OpcUa
 {
@@ -14,7 +16,7 @@ InternalSubscription::InternalSubscription(SubscriptionServiceInternal & service
   , CurrentSession(SessionAuthenticationToken)
   , Callback(callback)
   , io(service.GetIOService())
-  , Timer(io, boost::posix_time::microseconds(static_cast<unsigned long>(1000 * data.RevisedPublishingInterval)))
+  , Timer(io, std::chrono::microseconds(static_cast<unsigned long>(1000 * data.RevisedPublishingInterval)))
   , LifeTimeCount(data.RevisedLifetimeCount)
   , Logger(logger)
 {
@@ -25,7 +27,7 @@ void InternalSubscription::Start()
 {
   LOG_DEBUG(Logger, "internal_subscription | id: {}, start", Data.SubscriptionId);
   std::shared_ptr<InternalSubscription> self = shared_from_this();
-  Timer.async_wait([self](const boost::system::error_code & error) { self->PublishResults(error); });
+  Timer.async_wait([self](const asio::error_code & error) { self->PublishResults(error); });
 }
 
 InternalSubscription::~InternalSubscription()
@@ -47,7 +49,7 @@ void InternalSubscription::DeleteAllMonitoredItems()
 
   std::vector<uint32_t> handles;
   {
-    boost::shared_lock<boost::shared_mutex> lock(DbMutex);
+    std::shared_lock<std::shared_mutex> lock(DbMutex);
 
     for (auto pair : MonitoredDataChanges)
       {
@@ -69,7 +71,7 @@ bool InternalSubscription::HasExpired()
   return expired;
 }
 
-void InternalSubscription::PublishResults(const boost::system::error_code & error)
+void InternalSubscription::PublishResults(const asio::error_code & error)
 {
   if (error)
     {
@@ -105,15 +107,16 @@ void InternalSubscription::PublishResults(const boost::system::error_code & erro
     }
 
   TimerStopped = false;
-  Timer.expires_at(Timer.expires_at() + boost::posix_time::microseconds(static_cast<unsigned long>(1000 * Data.RevisedPublishingInterval)));
+  auto next = Timer.expiry() + std::chrono::microseconds(static_cast<long long>(1000 * Data.RevisedPublishingInterval));
+  Timer.expires_at(next);
   std::shared_ptr<InternalSubscription> self = shared_from_this();
-  Timer.async_wait([self](const boost::system::error_code & error) { self->PublishResults(error); });
+  Timer.async_wait([self](const asio::error_code & error) { self->PublishResults(error); });
 }
 
 
 bool InternalSubscription::HasPublishResult()
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   if (Startup || !TriggeredDataChangeEvents.empty() || !TriggeredEvents.empty())
     {
@@ -135,7 +138,7 @@ bool InternalSubscription::HasPublishResult()
 
 std::vector<PublishResult> InternalSubscription::PopPublishResult()
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   LOG_DEBUG(Logger, "internal_subscription | id: {}, PopPublishResult: {} queued items", Data.SubscriptionId, TriggeredDataChangeEvents.size());
   PublishResult result;
@@ -201,7 +204,7 @@ RepublishResponse InternalSubscription::Republish(const RepublishParameters & pa
 {
   LOG_DEBUG(Logger, "internal_subscription | id: {}, Republish request for sequence: {}", Data.SubscriptionId, params.RetransmitSequenceNumber);
 
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   RepublishResponse response;
 
@@ -264,7 +267,7 @@ NotificationData InternalSubscription::GetNotificationData()
 
 void InternalSubscription::NewAcknowlegment(const SubscriptionAcknowledgement & ack)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   NotAcknowledgedResults.remove_if([&](PublishResult res) { return ack.SequenceNumber == res.NotificationMessage.SequenceNumber; });
 }
@@ -277,7 +280,7 @@ MonitoredItemCreateResult InternalSubscription::CreateMonitoredItem(const Monito
   MonitoredItemCreateResult result;
   uint32_t callbackHandle = 0;
   {
-    boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+    std::unique_lock<std::shared_mutex> lock(DbMutex);
 
     result.MonitoredItemId = ++LastMonitoredItemId;
     result.Status = OpcUa::StatusCode::Good;
@@ -313,7 +316,7 @@ MonitoredItemCreateResult InternalSubscription::CreateMonitoredItem(const Monito
 
   MonitoredDataChange mdata;
   {
-    boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+    std::unique_lock<std::shared_mutex> lock(DbMutex);
 
     mdata.Parameters = result;
     mdata.Mode = request.MonitoringMode;
@@ -350,7 +353,7 @@ void InternalSubscription::TriggerDataChangeEvent(MonitoredDataChange monitoredi
   event.Data.ClientHandle = monitoreditems.ClientHandle;
   event.Data.Value = vals[0];
   {
-    boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+    std::unique_lock<std::shared_mutex> lock(DbMutex);
 
     TriggeredDataChangeEvents.push_back(event);
   }
@@ -385,7 +388,7 @@ std::vector<StatusCode> InternalSubscription::DeleteMonitoredItemsIds(const std:
 
 bool InternalSubscription::DeleteMonitoredDataChange(uint32_t handle)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   MonitoredDataChangeMap::iterator it = MonitoredDataChanges.find(handle);
 
@@ -428,7 +431,7 @@ bool InternalSubscription::DeleteMonitoredDataChange(uint32_t handle)
 
 bool InternalSubscription::DeleteMonitoredEvent(uint32_t handle)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   for (auto pair : MonitoredEvents)
     {
@@ -461,7 +464,7 @@ bool InternalSubscription::DeleteMonitoredEvent(uint32_t handle)
 
 void InternalSubscription::DataChangeCallback(const uint32_t & m_id, const DataValue & value)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   TriggeredDataChange event;
   MonitoredDataChangeMap::iterator it_monitoreditem = MonitoredDataChanges.find(m_id);
@@ -492,7 +495,7 @@ void InternalSubscription::DataChangeCallback(const uint32_t & m_id, const DataV
 
 void InternalSubscription::TriggerEvent(NodeId node, Event event)
 {
-  boost::shared_lock<boost::shared_mutex> lock(DbMutex);
+  std::shared_lock<std::shared_mutex> lock(DbMutex);
 
   MonitoredEventsMap::iterator it = MonitoredEvents.find(node);
 
@@ -511,7 +514,7 @@ bool InternalSubscription::EnqueueEvent(uint32_t monitoredItemId, const Event & 
 {
   LOG_DEBUG(Logger, "internal_subscription | id: {}, EnqueEvent: {}", Data.SubscriptionId, event);
 
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   //Find monitoredItem
   std::map<uint32_t, MonitoredDataChange>::iterator mii_it =  MonitoredDataChanges.find(monitoredItemId);

@@ -20,8 +20,8 @@
 #include <opc/ua/protocol/strings.h>
 #include <opc/ua/protocol/string_utils.h>
 
-#include <boost/asio.hpp>
-#include <boost/thread/shared_mutex.hpp>
+#include "asio.hpp"
+#include <shared_mutex>
 #include <ctime>
 #include <limits>
 #include <list>
@@ -44,7 +44,7 @@ typedef std::map <uint32_t, std::shared_ptr<InternalSubscription>> Subscriptions
 class SubscriptionServiceInternal : public Server::SubscriptionService
 {
 public:
-  SubscriptionServiceInternal(Server::AddressSpace::SharedPtr addressspace, boost::asio::io_service & io, const Common::Logger::SharedPtr & logger);
+  SubscriptionServiceInternal(Server::AddressSpace::SharedPtr addressspace, asio::io_context & io, const Common::Logger::SharedPtr & logger);
 
   ~SubscriptionServiceInternal();
 
@@ -57,16 +57,16 @@ public:
   virtual RepublishResponse Republish(const RepublishParameters & request);
 
   void DeleteAllSubscriptions();
-  boost::asio::io_service & GetIOService();
+  asio::io_context & GetIOService();
   bool PopPublishRequest(NodeId node);
   void TriggerEvent(NodeId node, Event event);
   Server::AddressSpace & GetAddressSpace();
 
 private:
-  boost::asio::io_service & io;
+  asio::io_context & io;
   Server::AddressSpace::SharedPtr AddressSpace;
   Common::Logger::SharedPtr Logger;
-  mutable boost::shared_mutex DbMutex;
+  mutable std::shared_mutex DbMutex;
   SubscriptionsIdMap SubscriptionsMap; // Map SubscptioinId, SubscriptionData
   uint32_t LastSubscriptionId = 2;
   std::map<NodeId, uint32_t> PublishRequestQueues;

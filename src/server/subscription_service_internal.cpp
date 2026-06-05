@@ -9,7 +9,8 @@
 
 #include "subscription_service_internal.h"
 
-#include <boost/thread/locks.hpp>
+#include <mutex>
+#include <shared_mutex>
 
 namespace
 {
@@ -33,7 +34,7 @@ namespace OpcUa
 namespace Internal
 {
 
-SubscriptionServiceInternal::SubscriptionServiceInternal(Server::AddressSpace::SharedPtr addressspace, boost::asio::io_service & ioService, const Common::Logger::SharedPtr & logger)
+SubscriptionServiceInternal::SubscriptionServiceInternal(Server::AddressSpace::SharedPtr addressspace, asio::io_context & ioService, const Common::Logger::SharedPtr & logger)
   : io(ioService)
   , AddressSpace(addressspace)
   , Logger(logger)
@@ -49,7 +50,7 @@ Server::AddressSpace & SubscriptionServiceInternal::GetAddressSpace()
   return *AddressSpace;
 }
 
-boost::asio::io_service & SubscriptionServiceInternal::GetIOService()
+asio::io_context & SubscriptionServiceInternal::GetIOService()
 {
   return io;
 }
@@ -60,7 +61,7 @@ void SubscriptionServiceInternal::DeleteAllSubscriptions()
 
   std::vector<uint32_t> ids(SubscriptionsMap.size());
   {
-    boost::shared_lock<boost::shared_mutex> lock(DbMutex);
+    std::shared_lock<std::shared_mutex> lock(DbMutex);
     std::transform(SubscriptionsMap.begin(), SubscriptionsMap.end(), ids.begin(), [](const SubscriptionsIdMap::value_type & i) {return i.first;});
   }
 
@@ -69,7 +70,7 @@ void SubscriptionServiceInternal::DeleteAllSubscriptions()
 
 std::vector<StatusCode> SubscriptionServiceInternal::DeleteSubscriptions(const std::vector<uint32_t> & subscriptions)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   std::vector<StatusCode> result;
 
@@ -98,7 +99,7 @@ std::vector<StatusCode> SubscriptionServiceInternal::DeleteSubscriptions(const s
 
 ModifySubscriptionResponse SubscriptionServiceInternal::ModifySubscription(const ModifySubscriptionParameters & parameters)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   ModifySubscriptionResponse response;
 
@@ -121,7 +122,7 @@ ModifySubscriptionResponse SubscriptionServiceInternal::ModifySubscription(const
 
 SubscriptionData SubscriptionServiceInternal::CreateSubscription(const CreateSubscriptionRequest & request, std::function<void (PublishResult)> callback)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   SubscriptionData data;
   data.SubscriptionId = ++LastSubscriptionId;
@@ -139,7 +140,7 @@ SubscriptionData SubscriptionServiceInternal::CreateSubscription(const CreateSub
 
 std::vector<MonitoredItemCreateResult> SubscriptionServiceInternal::CreateMonitoredItems(const MonitoredItemsParameters & params)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   std::vector<MonitoredItemCreateResult> data;
 
@@ -169,7 +170,7 @@ std::vector<MonitoredItemCreateResult> SubscriptionServiceInternal::CreateMonito
 
 std::vector<StatusCode> SubscriptionServiceInternal::DeleteMonitoredItems(const DeleteMonitoredItemsParameters & params)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   std::vector<StatusCode> results;
 
@@ -191,7 +192,7 @@ std::vector<StatusCode> SubscriptionServiceInternal::DeleteMonitoredItems(const 
 
 void SubscriptionServiceInternal::Publish(const PublishRequest & request)
 {
-  boost::unique_lock<boost::shared_mutex> lock(DbMutex);
+  std::unique_lock<std::shared_mutex> lock(DbMutex);
 
   const NodeId& session = request.Header.SessionAuthenticationToken;
   if (PublishRequestQueues[session] < 100)
@@ -215,7 +216,7 @@ void SubscriptionServiceInternal::Publish(const PublishRequest & request)
 
 RepublishResponse SubscriptionServiceInternal::Republish(const RepublishParameters & params)
 {
-  boost::shared_lock<boost::shared_mutex> lock(DbMutex);
+  std::shared_lock<std::shared_mutex> lock(DbMutex);
 
   SubscriptionsIdMap::iterator sub_it = SubscriptionsMap.find(params.SubscriptionId);
 
@@ -267,7 +268,7 @@ bool SubscriptionServiceInternal::PopPublishRequest(NodeId node)
 
 void SubscriptionServiceInternal::TriggerEvent(NodeId node, Event event)
 {
-  boost::shared_lock<boost::shared_mutex> lock(DbMutex);
+  std::shared_lock<std::shared_mutex> lock(DbMutex);
 
   //A new id must be generated every time we trigger an event,
   //if user have not set it manually we force something
@@ -288,7 +289,7 @@ void SubscriptionServiceInternal::TriggerEvent(NodeId node, Event event)
 namespace Server
 {
 
-SubscriptionService::UniquePtr CreateSubscriptionService(std::shared_ptr<Server::AddressSpace> addressspace, boost::asio::io_service & io, const Common::Logger::SharedPtr & logger)
+SubscriptionService::UniquePtr CreateSubscriptionService(std::shared_ptr<Server::AddressSpace> addressspace, asio::io_context & io, const Common::Logger::SharedPtr & logger)
 {
   return SubscriptionService::UniquePtr(new Internal::SubscriptionServiceInternal(addressspace, io, logger));
 }

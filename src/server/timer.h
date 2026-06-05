@@ -20,8 +20,8 @@
 #pragma once
 
 #include <atomic>
-#include <boost/asio/deadline_timer.hpp>
-#include <boost/chrono.hpp>
+#include "asio.hpp"
+#include <chrono>
 #include <mutex>
 #include <condition_variable>
 
@@ -30,7 +30,7 @@ namespace OpcUa
 class PeriodicTimer
 {
 public:
-  PeriodicTimer(boost::asio::io_service & io)
+  PeriodicTimer(asio::io_context & io)
     : Timer(io)
     , IsCanceled(true)
     , Stopped(true)
@@ -42,7 +42,7 @@ public:
     Cancel();
   }
 
-  void Start(const boost::asio::deadline_timer::duration_type & t, std::function<void()> handler)
+  void Start(const std::chrono::steady_clock::duration & t, std::function<void()> handler)
   {
     std::unique_lock<std::mutex> lock(Mutex);
 
@@ -51,8 +51,8 @@ public:
 
     Stopped = false;
     IsCanceled = false;
-    Timer.expires_from_now(t);
-    Timer.async_wait([this, handler, t](const boost::system::error_code & error)
+    Timer.expires_after(t);
+    Timer.async_wait([this, handler, t](const asio::error_code & error)
     {
       OnTimer(error, handler, t);
     });
@@ -74,7 +74,7 @@ public:
   }
 
 private:
-  void OnTimer(const boost::system::error_code & error, std::function<void()> handler, boost::asio::deadline_timer::duration_type t)
+  void OnTimer(const asio::error_code & error, std::function<void()> handler, std::chrono::steady_clock::duration t)
   {
     std::unique_lock<std::mutex> lock(Mutex);
 
@@ -88,8 +88,8 @@ private:
 
     handler();
 
-    Timer.expires_from_now(t);
-    Timer.async_wait([this, handler, t](const boost::system::error_code & error)
+    Timer.expires_after(t);
+    Timer.async_wait([this, handler, t](const asio::error_code & error)
     {
       OnTimer(error, handler, t);
     });
@@ -98,7 +98,7 @@ private:
 private:
   std::mutex Mutex;
   std::condition_variable StopEvent;
-  boost::asio::deadline_timer Timer;
+  asio::steady_timer Timer;
   std::atomic<bool> IsCanceled;
   std::atomic<bool> Stopped;
 };

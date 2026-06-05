@@ -11,8 +11,8 @@
 #include <opc/ua/protocol/string_utils.h>
 #include <opc/ua/services/attributes.h>
 
-#include <boost/asio.hpp>
-#include <boost/thread/shared_mutex.hpp>
+#include "asio.hpp"
+#include <shared_mutex>
 #include <chrono>
 #include <iostream>
 #include <list>
@@ -83,14 +83,14 @@ private:
   std::vector<PublishResult> PopPublishResult();
   bool HasPublishResult();
   NotificationData GetNotificationData();
-  void PublishResults(const boost::system::error_code & error);
+  void PublishResults(const asio::error_code & error);
   std::vector<Variant> GetEventFields(const EventFilter & filter, const Event & event);
   void TriggerDataChangeEvent(MonitoredDataChange monitoreditems, ReadValueId attrval);
 
 private:
   SubscriptionServiceInternal & Service;
   Server::AddressSpace & AddressSpace;
-  mutable boost::shared_mutex DbMutex;
+  mutable std::shared_mutex DbMutex;
   SubscriptionData Data;
   const NodeId CurrentSession;
   std::function<void (PublishResult)> Callback;
@@ -104,8 +104,8 @@ private:
   std::list<PublishResult> NotAcknowledgedResults; //result that have not be acknowledeged and may have to be resent
   std::list<TriggeredDataChange> TriggeredDataChangeEvents;
   std::list<TriggeredEvent> TriggeredEvents;
-  boost::asio::io_service & io;
-  boost::asio::deadline_timer Timer;
+  asio::io_context & io;
+  asio::steady_timer Timer;
   bool TimerStopped = false;
   uint32_t LifeTimeCount;
   Common::Logger::SharedPtr Logger;

@@ -147,7 +147,7 @@ libopcuaserver_la_SOURCES = \
 
 libopcuaserver_la_CPPFLAGS = -I$(top_srcdir)/include -I/usr/include/libxml2 $(GCOV_FLAGS)
 libopcuaserver_la_LIBADD = libopcuaprotocol.la libopcuacore.la
-libopcuaserver_la_LDFLAGS = -lpthread -ldl -lboost_thread -lboost_system -lboost_filesystem $(GCOV_LIBS) -lxml2 -Wl,--no-undefined
+libopcuaserver_la_LDFLAGS = -lpthread -ldl $(GCOV_LIBS) -lxml2 -Wl,--no-undefined
 
 
 ####################################################
@@ -164,7 +164,7 @@ opcuaserver_SOURCES = \
 
 opcuaserver_LDADD = libopcuaserver.la libopcuaprotocol.la libopcuacore.la
 opcuaserver_CPPFLAGS = -I$(top_srcdir)/include -I/usr/include/libxml2 -DCONFIG_PATH=\"$(sysconfdir)/opcua/server\"
-opcuaserver_LDFLAGS = -ldl -lpthread -lboost_filesystem -lboost_program_options -lboost_system -Wl,--no-undefined
+opcuaserver_LDFLAGS = -ldl -lpthread -Wl,--no-undefined
 
 
 test_opcuaserver_SOURCES = \
@@ -199,7 +199,7 @@ test_opcuaserver_SOURCES = \
 test_opcuaserver_LDADD = libopcuaserver.la libopcuaprotocol.la libopcuacore.la libopcuaclient.la
 test_opcuaserver_CPPFLAGS = -I$(top_srcdir)/include -I/usr/include/libxml2 -I$(top_srcdir)/src/server $(GTEST_INCLUDES) $(GMOCK_INCLUDES) \
                             -DDYNAMIC_ADDON_PATH="\"${DYNAMIC_ADDON_PATH}\"" -DTEST_CORE_CONFIG_PATH="\"${TEST_CORE_CONFIG_PATH}\""
-test_opcuaserver_LDFLAGS =  -ldl -lpthread $(GTEST_LIB) $(GTEST_MAIN_LIB) $(GMOCK_LIBS) $(GCOV_LIBS) -lboost_program_options
+test_opcuaserver_LDFLAGS =  -ldl -lpthread $(GTEST_LIB) $(GTEST_MAIN_LIB) $(GMOCK_LIBS) $(GCOV_LIBS)
 
 ####################################################
 # Protocol library
@@ -391,7 +391,7 @@ libopcuacore_la_SOURCES = \
 
 libopcuacore_la_CPPFLAGS = -I$(top_srcdir)/include -I/usr/include/libxml2 $(GCOV_FLAGS)
 libopcuacore_la_LIBADD = libopcuaprotocol.la
-libopcuacore_la_LDFLAGS = -lpthread -ldl -lboost_thread -lboost_filesystem -lboost_system -lxml2 $(GCOV_LIBS) -Wl,--no-undefined
+libopcuacore_la_LDFLAGS = -lpthread -ldl -lxml2 $(GCOV_LIBS) -Wl,--no-undefined
 
 test_dynamic_addon.o: tests/core/test_dynamic_addon.cpp
 	$(CC) -std=c++0x -I$(top_srcdir)/include -fPIC -g -c -Wall tests/core/test_dynamic_addon.cpp
@@ -457,7 +457,7 @@ opcua_SOURCES = \
 
 opcua_CPPFLAGS = -I$(top_srcdir)/include -I/usr/include/libxml2 -DCONFIG_PATH=\"$(sysconfdir)/opcua/client\"
 opcua_LDADD = libopcuaclient.la libopcuaprotocol.la libopcuacore.la
-opcua_LDFLAGS =  -ldl -lboost_program_options -lpthread -lxml2
+opcua_LDFLAGS =  -ldl -lpthread -lxml2
 
 #########################################################
 # OPCUA examples
@@ -469,7 +469,7 @@ example_client_SOURCES = \
 
 example_client_CPPFLAGS = -I$(top_srcdir)/include -I/usr/include/libxml2
 example_client_LDADD = libopcuaclient.la libopcuaprotocol.la libopcuacore.la
-example_client_LDFLAGS = -ldl -lpthread -lxml2 -lboost_system
+example_client_LDFLAGS = -ldl -lpthread -lxml2
 
 noinst_PROGRAMS += example_server
 example_server_SOURCES = \
@@ -477,7 +477,7 @@ example_server_SOURCES = \
 
 example_server_CPPFLAGS = -I$(top_srcdir)/include -I/usr/include/libxml2
 example_server_LDADD = libopcuaserver.la libopcuaprotocol.la libopcuacore.la
-example_server_LDFLAGS = -ldl -lpthread -lxml2 -lboost_system
+example_server_LDFLAGS = -ldl -lpthread -lxml2
 
 
 

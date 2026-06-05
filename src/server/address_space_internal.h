@@ -18,8 +18,8 @@
 #include <opc/ua/services/attributes.h>
 #include <opc/ua/services/node_management.h>
 
-#include <boost/thread/locks.hpp>
-#include <boost/thread/shared_mutex.hpp>
+#include <mutex>
+#include <shared_mutex>
 #include <ctime>
 #include <limits>
 #include <list>
@@ -126,7 +126,7 @@ private:
 
 private:
   Common::Logger::SharedPtr Logger;
-  mutable boost::shared_mutex DbMutex;
+  mutable std::shared_mutex DbMutex;
   NodesMap Nodes;
   ClientIdToAttributeMapType ClientIdToAttributeMap; //Use to find callback using callback subcsriptionid
   uint32_t MaxNodeIdNum = 2000;

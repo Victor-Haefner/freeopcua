@@ -21,7 +21,7 @@
 #include <opc/ua/subscription.h>
 #include <opc/ua/protocol/string_utils.h>
 
-#include <boost/asio.hpp>
+#include "asio.hpp"
 #include <iostream>
 
 namespace OpcUa
@@ -94,7 +94,7 @@ void Subscription::CallDataChangeCallback(const NotificationData & data)
 {
   for (const MonitoredItems & item : data.DataChange.Notification)
     {
-      std::unique_lock<std::mutex> lock(Mutex); //could used boost::shared_lock to improve perf
+      std::unique_lock<std::mutex> lock(Mutex); //could used shared_lock to improve perf
 
       AttValMap::iterator mapit = AttributeValueMap.find(item.ClientHandle);
 
@@ -126,7 +126,7 @@ void Subscription::CallEventCallback(const NotificationData & data)
 {
   for (EventFieldList ef : data.Events.Events)
     {
-      std::unique_lock<std::mutex> lock(Mutex); //could used boost::shared_lock to improve perf
+      std::unique_lock<std::mutex> lock(Mutex); //could used shared_lock to improve perf
 
       AttValMap::iterator mapit = AttributeValueMap.find(ef.ClientHandle);
 

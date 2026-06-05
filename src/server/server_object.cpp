@@ -19,7 +19,7 @@
 
 #include "server_object.h"
 
-#include <boost/chrono.hpp>
+#include <chrono>
 #include <opc/ua/node.h>
 #include <opc/ua/server/addons/services_registry.h>
 #include <functional>
@@ -55,7 +55,7 @@ namespace OpcUa
 namespace Server
 {
 
-ServerObject::ServerObject(Services::SharedPtr services, boost::asio::io_service & io, bool debug)
+ServerObject::ServerObject(Services::SharedPtr services, asio::io_context & io, bool debug)
   : Server(services)
 //  , Io(io)
   , Debug(debug)
@@ -63,7 +63,7 @@ ServerObject::ServerObject(Services::SharedPtr services, boost::asio::io_service
   , ServerTime(Instance.GetVariable(GetCurrentTimeRelativepath()))
   , Timer(io)
 {
-  Timer.Start(boost::posix_time::seconds(1), [this]()
+  Timer.Start(std::chrono::seconds(1), [this]()
   {
     UpdateTime();
   });

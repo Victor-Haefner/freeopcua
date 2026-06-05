@@ -20,7 +20,7 @@
 #pragma once
 
 
-#include <boost/asio.hpp>
+#include "asio.hpp"
 #include <opc/common/addons_core/addon.h>
 #include <opc/ua/services/services.h>
 
@@ -38,7 +38,7 @@ public:
   DEFINE_CLASS_POINTERS(AsioAddon)
 
 public:
-  virtual boost::asio::io_service & GetIoService() = 0;
+  virtual asio::io_context & GetIoService() = 0;
 };
 
 

@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <boost/asio.hpp>
+#include "asio.hpp"
 #include <opc/ua/event.h>
 #include <opc/ua/server/address_space.h>
 #include <opc/ua/services/subscriptions.h>
@@ -29,7 +29,7 @@ public:
   virtual void TriggerEvent(NodeId node, Event event) = 0;
 };
 
-  SubscriptionService::UniquePtr CreateSubscriptionService(std::shared_ptr<AddressSpace> addressspace, boost::asio::io_service & io, const Common::Logger::SharedPtr & logger);
+  SubscriptionService::UniquePtr CreateSubscriptionService(std::shared_ptr<AddressSpace> addressspace, asio::io_context & io, const Common::Logger::SharedPtr & logger);
 
 } // namespace UaServer
 } // nmespace OpcUa

@@ -19,7 +19,7 @@
 
 #include <opc/ua/server/addons/asio_addon.h>
 
-#include <boost/asio.hpp>
+#include "asio.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -31,7 +31,7 @@ class AsioAddonImpl : public OpcUa::Server::AsioAddon
 {
 public:
   AsioAddonImpl()
-    : Work(IoService)
+    : Work(asio::make_work_guard(IoService))
   {
   }
 
@@ -63,7 +63,7 @@ public:
     });
   }
 
-  virtual boost::asio::io_service & GetIoService() override
+  virtual asio::io_context & GetIoService() override
   {
     return IoService;
   }
@@ -85,8 +85,8 @@ public:
   }
 
 private:
-  boost::asio::io_service IoService;
-  boost::asio::io_service::work Work;
+  asio::io_context IoService;
+  asio::executor_work_guard<asio::io_context::executor_type> Work;
   std::vector<std::thread> Threads;
 };
 }

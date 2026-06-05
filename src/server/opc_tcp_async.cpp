@@ -29,7 +29,8 @@
 #include <opc/ua/protocol/input_from_buffer.h>
 
 #include <array>
-#include <boost/asio.hpp>
+#include "asio.hpp"
+#include "asio/ip/tcp.hpp"
 #include <future>
 #include <iostream>
 #include <set>
@@ -42,9 +43,9 @@ namespace
 using namespace OpcUa;
 using namespace OpcUa::Binary;
 using namespace OpcUa;
-
-using namespace boost::asio;
-using namespace boost::asio::ip;
+using asio::ip::tcp;
+using asio::buffer;
+using asio::transfer_exactly;
 
 
 class OpcTcpConnection;
@@ -55,7 +56,7 @@ public:
   DEFINE_CLASS_POINTERS(OpcTcpServer)
 
 public:
-  OpcTcpServer(const AsyncOpcTcp::Parameters & params, Services::SharedPtr server, boost::asio::io_service & ioService, const Common::Logger::SharedPtr & logger);
+  OpcTcpServer(const AsyncOpcTcp::Parameters & params, Services::SharedPtr server, asio::io_context & ioService, const Common::Logger::SharedPtr & logger);
 
   virtual void Listen() override;
   virtual void Shutdown() override;
@@ -106,19 +107,15 @@ public:
      */
     typedef std::promise<void> Promise;
     Promise promise;
-#if BOOST_VERSION < 107000
-    Socket.get_io_service().post(bind(&Promise::set_value, &promise));
-#else
     post(Socket.get_executor(), bind(&Promise::set_value, &promise));
-#endif
     promise.get_future().wait();
   }
 
 
 private:
   void ReadNextData();
-  void ProcessHeader(const boost::system::error_code & error, std::size_t bytes_transferred);
-  void ProcessMessage(OpcUa::Binary::MessageType type, const boost::system::error_code & error, std::size_t bytesTransferred);
+  void ProcessHeader(const asio::error_code & error, std::size_t bytes_transferred);
+  void ProcessMessage(OpcUa::Binary::MessageType type, const asio::error_code & error, std::size_t bytesTransferred);
   void GoodBye();
 
   std::size_t GetHeaderSize() const;
@@ -171,7 +168,7 @@ void OpcTcpConnection::ReadNextData()
   // async operation decides to call GoodBye()
   OpcTcpConnection::SharedPtr self = shared_from_this();
   async_read(Socket, buffer(Buffer), transfer_exactly(GetHeaderSize()),
-             [self](const boost::system::error_code & error, std::size_t bytes_transferred)
+             [self](const asio::error_code & error, std::size_t bytes_transferred)
   {
     try
       {
@@ -191,7 +188,7 @@ std::size_t OpcTcpConnection::GetHeaderSize() const
   return OpcUa::Binary::RawSize(OpcUa::Binary::Header());
 }
 
-void OpcTcpConnection::ProcessHeader(const boost::system::error_code & error, std::size_t bytes_transferred)
+void OpcTcpConnection::ProcessHeader(const asio::error_code & error, std::size_t bytes_transferred)
 {
   if (error)
     {
@@ -215,7 +212,7 @@ void OpcTcpConnection::ProcessHeader(const boost::system::error_code & error, st
   // async operation decides to call GoodBye()
   OpcTcpConnection::SharedPtr self = shared_from_this();
   async_read(Socket, buffer(Buffer), transfer_exactly(messageSize),
-             [self, header](const boost::system::error_code & error, std::size_t bytesTransferred)
+             [self, header](const asio::error_code & error, std::size_t bytesTransferred)
   {
     self->ProcessMessage(header.Type, error, bytesTransferred);
   }
@@ -223,7 +220,7 @@ void OpcTcpConnection::ProcessHeader(const boost::system::error_code & error, st
 
 }
 
-void OpcTcpConnection::ProcessMessage(OpcUa::Binary::MessageType type, const boost::system::error_code & error, std::size_t bytesTransferred)
+void OpcTcpConnection::ProcessMessage(OpcUa::Binary::MessageType type, const asio::error_code & error, std::size_t bytesTransferred)
 {
   if (error)
     {
@@ -284,7 +281,7 @@ void OpcTcpConnection::Send(const char * message, std::size_t size)
   // do not lose reference to shared instance even if another
   // async operation decides to call GoodBye()
   OpcTcpConnection::SharedPtr self = shared_from_this();
-  async_write(Socket, buffer(&(*data)[0], data->size()), [self, data](const boost::system::error_code & err, size_t bytes)
+  async_write(Socket, buffer(&(*data)[0], data->size()), [self, data](const asio::error_code & err, size_t bytes)
   {
     if (err)
       {
@@ -297,7 +294,7 @@ void OpcTcpConnection::Send(const char * message, std::size_t size)
   });
 }
 
-OpcTcpServer::OpcTcpServer(const AsyncOpcTcp::Parameters & params, Services::SharedPtr server, boost::asio::io_service & ioService, const Common::Logger::SharedPtr & logger)
+OpcTcpServer::OpcTcpServer(const AsyncOpcTcp::Parameters & params, Services::SharedPtr server, asio::io_context & ioService, const Common::Logger::SharedPtr & logger)
   : Params(params)
   , Server(server)
   , Logger(logger)
@@ -313,16 +310,16 @@ OpcTcpServer::OpcTcpServer(const AsyncOpcTcp::Parameters & params, Services::Sha
 
   else if (params.Host == "localhost")
     {
-      ep = tcp::endpoint(ip::address::from_string("127.0.0.1"), params.Port);
+      ep = tcp::endpoint(asio::ip::make_address("127.0.0.1"), params.Port);
     }
 
   else
     {
-      ep = tcp::endpoint(ip::address::from_string(params.Host), params.Port);
+      ep = tcp::endpoint(asio::ip::make_address(params.Host), params.Port);
     }
 
   acceptor.open(ep.protocol());
-  acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+  acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true));
   acceptor.bind(ep);
 }
 
@@ -376,11 +373,7 @@ void OpcTcpServer::Shutdown()
    */
   typedef std::promise<void> Promise;
   Promise promise;
-#if BOOST_VERSION < 107000
-  acceptor.get_io_service().post(bind(&Promise::set_value, &promise));
-#else
   post(acceptor.get_executor(), bind(&Promise::set_value, &promise));
-#endif
   promise.get_future().wait();
 }
 
@@ -388,7 +381,7 @@ void OpcTcpServer::Accept()
 {
   try
     {
-      acceptor.async_accept(socket, [this](boost::system::error_code errorCode)
+      acceptor.async_accept(socket, [this](asio::error_code errorCode)
       {
         if (!acceptor.is_open())
           {
@@ -429,7 +422,9 @@ void OpcTcpServer::RemoveClient(OpcTcpConnection::SharedPtr client)
 
 } // namespace
 
-OpcUa::Server::AsyncOpcTcp::UniquePtr OpcUa::Server::CreateAsyncOpcTcp(const OpcUa::Server::AsyncOpcTcp::Parameters & params, Services::SharedPtr server, boost::asio::io_service & io, const Common::Logger::SharedPtr & logger)
-{
-  return AsyncOpcTcp::UniquePtr(new OpcTcpServer(params, server, io, logger));
+namespace OpcUa::Server {
+	AsyncOpcTcp::UniquePtr CreateAsyncOpcTcp(const AsyncOpcTcp::Parameters & params, Services::SharedPtr server, asio::io_context & io, const Common::Logger::SharedPtr & logger)
+	{
+		return AsyncOpcTcp::UniquePtr(new OpcTcpServer(params, server, io, logger));
+	}
 }

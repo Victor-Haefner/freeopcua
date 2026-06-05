@@ -19,7 +19,7 @@
 
 #pragma once
 
-#include <boost/asio.hpp>
+#include "asio.hpp"
 #include <opc/ua/services/services.h>
 #include <opc/ua/model.h>
 
@@ -36,7 +36,7 @@ public:
   DEFINE_CLASS_POINTERS(ServerObject)
 
 public:
-  ServerObject(Services::SharedPtr services, boost::asio::io_service & io, bool debug);
+  ServerObject(Services::SharedPtr services, asio::io_context & io, bool debug);
   ~ServerObject();
 
 private:
