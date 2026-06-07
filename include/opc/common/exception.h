@@ -12,10 +12,11 @@
 #define __MOZOPC_EXCEPTION__H__
 
 
-#include <boost/format.hpp>
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <cstdio>
+#include <cstdarg>
 
 
 namespace Common
@@ -76,6 +77,15 @@ inline Error CreateError(
   return Common::Error(lineNum, filename, errorCode, msg);
 }
 
+inline std::string exFormat(const char* msg, ...) {
+    char buffer[512];
+    va_list args;
+    va_start(args, msg);
+    std::vsnprintf(buffer, sizeof(buffer), msg, args);
+    va_end(args);
+    return std::string(buffer);
+}
+
 template <typename T1>
 inline Error CreateError(
   unsigned lineNum,
@@ -84,7 +94,7 @@ inline Error CreateError(
   const char * msg,
   const T1 & param1)
 {
-  const std::string & resultMessage = str(boost::format(msg) % param1);
+  const std::string & resultMessage = exFormat(msg, param1);
   return Error(lineNum, fileName, errorCode, resultMessage.c_str());
 }
 
@@ -97,7 +107,7 @@ inline Error CreateError(
   const T1 & param1,
   const Common::Error & subError)
 {
-  const std::string & resultMessage = str(boost::format(msg) % param1);
+  const std::string & resultMessage = exFormat(msg, param1);
   Error resultError(lineNum, fileName, errorCode, resultMessage.c_str());
   resultError.AddError(subError);
   return resultError;
@@ -112,7 +122,7 @@ inline Error CreateError(
   const T1 & param1,
   const T2 & param2)
 {
-  const std::string & resultMessage = str(boost::format(msg) % param1 % param2);
+  const std::string & resultMessage = exFormat(msg, param1, param2);
   return Error(lineNum, fileName, errorCode, resultMessage.c_str());
 }
 
@@ -127,7 +137,7 @@ inline Error CreateError(
   const T2 & param2,
   const Common::Error & subError)
 {
-  const std::string & resultMessage = str(boost::format(msg) % param1 % param2);
+  const std::string & resultMessage = exFormat(msg, param1, param2);
   Error resultError(lineNum, fileName, errorCode, resultMessage.c_str());
   resultError.AddError(subError);
   return resultError;
@@ -143,7 +153,7 @@ inline Error CreateError(
   const T2 & param2,
   const T3 & param3)
 {
-  const std::string & resultMessage = str(boost::format(msg) % param1 % param2 % param3);
+  const std::string & resultMessage = exFormat(msg, param1, param2, param3);
   return Error(lineNum, fileName, errorCode, resultMessage.c_str());
 }
 
@@ -158,7 +168,7 @@ inline Error CreateError(
   const T3 & param3,
   const Common::Error & subError)
 {
-  const std::string & resultMessage = str(boost::format(msg) % param1 % param2 % param3);
+  const std::string & resultMessage = exFormat(msg, param1, param2, param3);
   Error resultError(lineNum, fileName, errorCode, resultMessage.c_str());
   resultError.AddError(subError);
   return resultError;
@@ -175,7 +185,7 @@ inline Error CreateError(
   const T3 & param3,
   const T4 & param4)
 {
-  const std::string & resultMessage = str(boost::format(msg) % param1 % param2 % param3 % param4);
+  const std::string & resultMessage = exFormat(msg, param1, param2, param3, param4);
   return Error(lineNum, fileName, errorCode, resultMessage.c_str());
 }
 
@@ -191,7 +201,7 @@ inline Error CreateError(
   const T4 & param4,
   const Common::Error & subError)
 {
-  const std::string & resultMessage = str(boost::format(msg) % param1 % param2 % param3 % param4);
+  const std::string & resultMessage = exFormat(msg, param1, param2, param3, param4);
   Error resultError(lineNum, fileName, errorCode, resultMessage.c_str());
   resultError.AddError(subError);
   return resultError;

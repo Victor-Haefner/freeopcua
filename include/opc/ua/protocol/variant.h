@@ -15,7 +15,7 @@
 #include <opc/ua/protocol/types.h>
 #include <opc/ua/protocol/status_codes.h>
 
-#include <boost/any.hpp>
+#include <any>
 #include <string>
 
 #include <stdexcept>
@@ -157,7 +157,7 @@ public:
 
 class Variant
 {
-  boost::any Value;
+  std::any Value;
 
 public:
   std::vector<uint32_t> Dimensions;
@@ -228,7 +228,7 @@ public:
   template <typename T>
   bool operator==(const T & value) const
   {
-    return boost::any_cast<T>(Value) == value;
+    return std::any_cast<T>(Value) == value;
   }
 
   bool operator==(const char * value) const
@@ -270,7 +270,7 @@ public:
   template <typename T>
   T As() const
   {
-    return boost::any_cast<T>(Value);
+    return std::any_cast<T>(Value);
   }
 
   template <typename T>
