@@ -15,7 +15,7 @@
 #include <boost/foreach.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 #include <algorithm>
 #include <iostream>
@@ -125,7 +125,7 @@ Common::Configuration Common::ParseConfiguration(const std::string & configPath)
 
 Common::Configuration Common::ParseConfigurationFiles(const std::string & directory)
 {
-  using namespace boost::filesystem;
+  using namespace std::filesystem;
   Common::Configuration configuration;
   path p(directory);
   directory_iterator dirIt(p);
