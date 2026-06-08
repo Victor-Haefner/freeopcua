@@ -12,19 +12,130 @@
 
 #include <opc/ua/protocol/string_utils.h>
 
-#include <boost/program_options/options_description.hpp>
-#include <boost/program_options/parsers.hpp>
-#include <boost/program_options/variables_map.hpp>
 #include <iostream>
+#include <map>
 
 #ifndef CONFIG_PATH
 #define CONFIG_PATH "/etc/opcua/client"
 #endif
 
-namespace
+using namespace std;
+
+namespace OpcUa
 {
-namespace po = boost::program_options;
-using namespace OpcUa;
+
+struct Args {
+	struct Option {
+		int pos = -1;
+		string name;
+		string shortname;
+		string desc;
+		
+		bool expects_value = false;
+        	string value;
+		
+		Option(string n, string d = "", int p = -1) : pos(p), desc(d) {
+			auto cp = n.find(',');
+			if (cp != std::string::npos) {
+				name = n.substr(0, cp);
+				shortname = n.substr(cp + 1);
+			} else name = n;
+		}
+	};
+	
+	using OptionPtr = shared_ptr<Option>;
+
+    	map<string, OptionPtr> options;
+    	vector<string> positionals;
+    
+	Args() {}
+
+	void add_option(string name, string desc, int pos = -1) { 
+		auto opt = OptionPtr( new Option(name,desc) ); 
+		options[opt->name] = opt;
+		if (opt->shortname.size() > 0) options[opt->shortname] = opt;
+	}
+	
+	int count(string name) const {
+		auto it = options.find(name);
+		return (it != options.end() && !it->second->value.empty()) ? 1 : 0;
+	}
+	
+	string get(string name) const {
+		auto it = options.find(name);
+		if (it != options.end()) return it->second->value;
+		return "";
+	}
+	
+	template<class T>
+	T convert(string name) const {
+		string v;
+		auto it = options.find(name);
+		if (it != options.end()) v = it->second->value;
+		
+		std::stringstream ss(v);
+
+		if constexpr (std::is_same_v<T, uint8_t>) {
+        		unsigned int tmp;
+        		ss >> tmp;
+        		return static_cast<uint8_t>(tmp);
+		} else {
+			T result{};
+			ss >> result;
+			return result;
+		}
+	}
+	
+	void print_options() {
+	    cout << endl;
+	    map<string, OptionPtr> opts;
+	    for (auto& o : options) opts[o.second->name] = o.second;
+	    for (auto& o : options) {
+	    	auto opt = o.second;
+	    	cout << opt->name;
+	    	if (opt->shortname.size() > 0) cout << "," << opt->shortname;
+	    	cout << endl << opt->desc << endl << endl;
+	    }
+	    cout << endl;
+	}
+	
+	void parse(int argc, char** argv) {
+		auto match_option = [&](const std::string& key) -> OptionPtr* {
+			auto it = options.find(key);
+			if (it != options.end()) return &it->second;
+			return nullptr;
+		};
+
+		for (int i = 1; i < argc; ++i) {
+			std::string arg = argv[i];
+
+			if (arg.size() > 1 && arg[0] == '-') {
+				std::string key = arg;
+
+				// strip "--"
+				if (arg.rfind("--", 0) == 0) key = arg.substr(2);
+				else key = arg.substr(1);
+
+				auto opt_ptr = match_option(key);
+				if (!opt_ptr || !*opt_ptr) continue;
+				auto& opt = **opt_ptr;
+
+				// assume: if next arg exists and is not option → value
+				if (i + 1 < argc) {
+					std::string next = argv[i + 1];
+
+					if (next.empty() || next[0] != '-') {
+						opt.value = next;
+						opt.expects_value = true;
+						++i;
+					} else opt.value = "true"; // flag
+				} else opt.value = "true";
+			}
+
+			else positionals.push_back(arg);
+		}
+	}
+};
 
 const char * OPTION_HELP = "help";
 const char * OPTION_GET_ENDPOINTS = "get-endpoints";
@@ -60,77 +171,71 @@ const char * OPTION_VALUE_STRING = "value-string";
 // codegen
 #include "opcua_options_attribute_ids.h"
 
-NodeId GetNodeIdOptionValue(const po::variables_map & vm)
+NodeId GetNodeIdOptionValue(const Args & args)
 {
-  const std::string & value = vm[OPTION_NODE_Id].as<std::string>();
+  const std::string & value = args.get(OPTION_NODE_Id);
   return OpcUa::ToNodeId(value);
 }
 
-Variant GetOptionValue(const po::variables_map & vm)
+Variant GetOptionValue(const Args & args)
 {
-  if (vm.count(OPTION_VALUE_BYTE))
+  if (args.count(OPTION_VALUE_BYTE))
     {
-      return Variant(vm[OPTION_VALUE_BYTE].as<uint8_t>());
+      return Variant(args.convert<uint8_t>(OPTION_VALUE_BYTE));
     }
 
-  if (vm.count(OPTION_VALUE_SBYTE))
+  if (args.count(OPTION_VALUE_SBYTE))
     {
-      return Variant(vm[OPTION_VALUE_SBYTE].as<int8_t>());
+      return Variant(args.convert<uint8_t>(OPTION_VALUE_SBYTE));
     }
 
-  if (vm.count(OPTION_VALUE_UINT16))
+  if (args.count(OPTION_VALUE_UINT16))
     {
-      return Variant(vm[OPTION_VALUE_UINT16].as<uint16_t>());
+      return Variant(args.convert<uint16_t>(OPTION_VALUE_UINT16));
     }
 
-  if (vm.count(OPTION_VALUE_INT16))
+  if (args.count(OPTION_VALUE_INT16))
     {
-      return Variant(vm[OPTION_VALUE_INT16].as<int16_t>());
+      return Variant(args.convert<int16_t>(OPTION_VALUE_INT16));
     }
 
-  if (vm.count(OPTION_VALUE_UINT32))
+  if (args.count(OPTION_VALUE_UINT32))
     {
-      return Variant(vm[OPTION_VALUE_UINT32].as<uint32_t>());
+      return Variant(args.convert<uint32_t>(OPTION_VALUE_UINT32));
     }
 
-  if (vm.count(OPTION_VALUE_INT32))
+  if (args.count(OPTION_VALUE_INT32))
     {
-      return Variant(vm[OPTION_VALUE_INT32].as<int32_t>());
+      return Variant(args.convert<int32_t>(OPTION_VALUE_INT32));
     }
 
-  if (vm.count(OPTION_VALUE_UINT64))
+  if (args.count(OPTION_VALUE_UINT64))
     {
-      return Variant(vm[OPTION_VALUE_UINT64].as<uint64_t>());
+      return Variant(args.convert<uint64_t>(OPTION_VALUE_UINT64));
     }
 
-  if (vm.count(OPTION_VALUE_INT64))
+  if (args.count(OPTION_VALUE_INT64))
     {
-      return Variant(vm[OPTION_VALUE_INT64].as<int64_t>());
+      return Variant(args.convert<int64_t>(OPTION_VALUE_INT64));
     }
 
-  if (vm.count(OPTION_VALUE_FLOAT))
+  if (args.count(OPTION_VALUE_FLOAT))
     {
-      return Variant(vm[OPTION_VALUE_FLOAT].as<float>());
+      return Variant(args.convert<float>(OPTION_VALUE_FLOAT));
     }
 
-  if (vm.count(OPTION_VALUE_DOUBLE))
+  if (args.count(OPTION_VALUE_DOUBLE))
     {
-      return Variant(vm[OPTION_VALUE_DOUBLE].as<double>());
+      return Variant(args.convert<double>(OPTION_VALUE_DOUBLE));
     }
 
-  if (vm.count(OPTION_VALUE_STRING))
+  if (args.count(OPTION_VALUE_STRING))
     {
-      return Variant(vm[OPTION_VALUE_STRING].as<std::string>());
+      return Variant(args.get(OPTION_VALUE_STRING));
     }
 
   return Variant();
 }
-
-}
-
-
-namespace OpcUa
-{
 
 CommandLine::CommandLine(int argc, char ** argv)
   : NamespaceIndex(0)
@@ -146,88 +251,85 @@ CommandLine::CommandLine(int argc, char ** argv)
   , IsRemoveModule(false)
 {
   // Declare the supported options.
-  po::options_description desc("Parameters");
-  desc.add_options()
-  (OPTION_HELP, "produce help message")
-  (OPTION_GET_ENDPOINTS, "List endpoints endpoints.")
-  (OPTION_BROWSE, "browse command.")
-  (OPTION_READ, "read command.")
-  (OPTION_WRITE, "write command.")
-  (OPTION_CREATE_SUBSCRIPTION, "create subscription command.")
-  (OPTION_FIND_ServerS, "find servers command.")
-  (OPTION_REGISTER_MODULE, "Register new module.")
-  (OPTION_UNREGISTER_MODULE, "Unregister module.")
+  Args args;
+  
+  args.add_option(OPTION_HELP, "produce help message");
+  args.add_option(OPTION_GET_ENDPOINTS, "List endpoints endpoints.");
+  args.add_option(OPTION_BROWSE, "browse command.");
+  args.add_option(OPTION_READ, "read command.");
+  args.add_option(OPTION_WRITE, "write command.");
+  args.add_option(OPTION_CREATE_SUBSCRIPTION, "create subscription command.");
+  args.add_option(OPTION_FIND_ServerS, "find servers command.");
+  args.add_option(OPTION_REGISTER_MODULE, "Register new module.");
+  args.add_option(OPTION_UNREGISTER_MODULE, "Unregister module.");
 
-  (OPTION_Server_URI, po::value<std::string>(), "Uri of the server.")
-  (OPTION_ATTRIBUTE, po::value<std::string>(), "Name of attribute.")
-  (OPTION_NODE_Id, po::value<std::string>(), "NodeId in the form 'nsu=uri;srv=1;ns=0;i=84.")
-  (OPTION_VALUE_BYTE, po::value<uint8_t>(), "Byte value.")
-  (OPTION_VALUE_SBYTE, po::value<int8_t>(), "Signed byte value.")
-  (OPTION_VALUE_UINT16, po::value<uint16_t>(), "UInt16 value.")
-  (OPTION_VALUE_INT16, po::value<int16_t>(), "Int16 value.")
-  (OPTION_VALUE_UINT32, po::value<uint32_t>(), "UInt32 value.")
-  (OPTION_VALUE_INT32, po::value<int32_t>(), "Int32 value.")
-  (OPTION_VALUE_UINT64, po::value<uint64_t>(), "UInt64 value.")
-  (OPTION_VALUE_INT64, po::value<int64_t>(), "Int64 value.")
-  (OPTION_VALUE_FLOAT, po::value<float>(), "Float value.")
-  (OPTION_VALUE_DOUBLE, po::value<double>(), "Double value.")
-  (OPTION_VALUE_STRING, po::value<std::string>(), "String value.")
-  (OPTION_MODULE_Id, po::value<std::string>(), "Id of the new module.")
-  (OPTION_MODULE_PATH, po::value<std::string>(), "Path to the new module shared library.")
-  (OPTION_CONFIG_DIR, po::value<std::string>(), "Path to the directory with modules configuration files. By default '" CONFIG_PATH "'.");
+  args.add_option(OPTION_Server_URI, "Uri of the server.");
+  args.add_option(OPTION_ATTRIBUTE, "Name of attribute.");
+  args.add_option(OPTION_NODE_Id, "NodeId in the form 'nsu=uri;srv=1;ns=0;i=84.");
+  args.add_option(OPTION_VALUE_BYTE, "Byte value.");
+  args.add_option(OPTION_VALUE_SBYTE, "Signed byte value.");
+  args.add_option(OPTION_VALUE_UINT16, "UInt16 value.");
+  args.add_option(OPTION_VALUE_INT16, "Int16 value.");
+  args.add_option(OPTION_VALUE_UINT32, "UInt32 value.");
+  args.add_option(OPTION_VALUE_INT32, "Int32 value.");
+  args.add_option(OPTION_VALUE_UINT64, "UInt64 value.");
+  args.add_option(OPTION_VALUE_INT64, "Int64 value.");
+  args.add_option(OPTION_VALUE_FLOAT, "Float value.");
+  args.add_option(OPTION_VALUE_DOUBLE, "Double value.");
+  args.add_option(OPTION_VALUE_STRING, "String value.");
+  args.add_option(OPTION_MODULE_Id, "Id of the new module.");
+  args.add_option(OPTION_MODULE_PATH, "Path to the new module shared library.");
+  args.add_option(OPTION_CONFIG_DIR, "Path to the directory with modules configuration files. By default '" CONFIG_PATH "'.");
 
+  args.parse(argc, argv);
 
-  po::variables_map vm;
-  po::store(po::parse_command_line(argc, argv, desc), vm);
-  po::notify(vm);
-
-  if (vm.count(OPTION_HELP))
+  if (args.count(OPTION_HELP))
     {
       IsHelp = true;
-      desc.print(std::cout);
+      args.print_options();
       return;
     }
 
-  if (vm.count(OPTION_Server_URI))
+  if (args.count(OPTION_Server_URI))
     {
-      ServerURI = vm[OPTION_Server_URI].as<std::string>();
+      ServerURI = args.get(OPTION_Server_URI);
     }
 
 
-  if (vm.count(OPTION_NODE_Id))
+  if (args.count(OPTION_NODE_Id))
     {
-      Node = GetNodeIdOptionValue(vm);
+      Node = GetNodeIdOptionValue(args);
     }
 
-  if (vm.count(OPTION_ATTRIBUTE))
+  if (args.count(OPTION_ATTRIBUTE))
     {
-      Attribute = GetAttributeIdOptionValue(vm);
+      Attribute = GetAttributeIdOptionValue(args);
     }
 
-  Value = GetOptionValue(vm);
-  IsGetEndpoints = vm.count(OPTION_GET_ENDPOINTS) != 0;
-  IsBrowse = vm.count(OPTION_BROWSE) != 0;
-  IsRead = vm.count(OPTION_READ) != 0;
-  IsWrite = vm.count(OPTION_WRITE) != 0;
-  IsCreateSubscription = vm.count(OPTION_CREATE_SUBSCRIPTION) != 0;
-  IsFindServers = vm.count(OPTION_FIND_ServerS) != 0;
+  Value = GetOptionValue(args);
+  IsGetEndpoints = args.count(OPTION_GET_ENDPOINTS) != 0;
+  IsBrowse = args.count(OPTION_BROWSE) != 0;
+  IsRead = args.count(OPTION_READ) != 0;
+  IsWrite = args.count(OPTION_WRITE) != 0;
+  IsCreateSubscription = args.count(OPTION_CREATE_SUBSCRIPTION) != 0;
+  IsFindServers = args.count(OPTION_FIND_ServerS) != 0;
 
-  if (vm.count(OPTION_REGISTER_MODULE))
+  if (args.count(OPTION_REGISTER_MODULE))
     {
       IsAddModule = true;
-      ModulePath = vm[OPTION_MODULE_PATH].as<std::string>();
-      ModuleId = vm[OPTION_MODULE_Id].as<std::string>();
+      ModulePath = args.get(OPTION_MODULE_PATH);
+      ModuleId = args.get(OPTION_MODULE_Id);
     }
 
-  if (vm.count(OPTION_UNREGISTER_MODULE))
+  if (args.count(OPTION_UNREGISTER_MODULE))
     {
       IsRemoveModule = true;
-      ModuleId = vm[OPTION_MODULE_Id].as<std::string>();
+      ModuleId = args.get(OPTION_MODULE_Id);
     }
 
-  if (vm.count(OPTION_CONFIG_DIR))
+  if (args.count(OPTION_CONFIG_DIR))
     {
-      ConfigDir = vm[OPTION_CONFIG_DIR].as<std::string>();
+      ConfigDir = args.get(OPTION_CONFIG_DIR);
     }
 
   else

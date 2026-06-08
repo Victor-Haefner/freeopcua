@@ -278,6 +278,8 @@ SET(opcuacore_SOURCES
     src/core/socket_channel.cpp
     src/core/subscription.cpp
     src/core/server_operations.cpp
+    src/asio/src/asio.cpp
+    src/asio/include/asio/impl/error.ipp
 )
 
 add_library(opcuacore ${opcuacore_SOURCES})
